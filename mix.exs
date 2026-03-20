@@ -59,6 +59,10 @@ defmodule ClaudePlans.MixProject do
           targets: [
             macos_arm: [os: :darwin, cpu: :aarch64],
             macos_intel: [os: :darwin, cpu: :x86_64]
+            # Untested — uncomment to build for Linux/Windows:
+            # linux_arm: [os: :linux, cpu: :aarch64],
+            # linux_intel: [os: :linux, cpu: :x86_64],
+            # windows_intel: [os: :windows, cpu: :x86_64]
           ]
         ]
       ]

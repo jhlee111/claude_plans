@@ -4,14 +4,13 @@ defmodule ClaudePlans.Web.BrowserLive do
   alias ClaudePlans.Watcher
   alias ClaudePlans.Renderer
 
-  @projects_dir Path.expand("~/.claude/projects")
-
   @impl true
   def mount(_params, _session, socket) do
     if connected?(socket), do: Watcher.subscribe()
 
     plans = Watcher.list_plans()
-    projects = list_projects()
+    projects_dir = ClaudePlans.projects_dir()
+    projects = list_projects(projects_dir)
 
     {selected, html} =
       case plans do
@@ -30,7 +29,7 @@ defmodule ClaudePlans.Web.BrowserLive do
        project_files: [],
        selected_file: nil,
        file_html: nil,
-       projects_dir: @projects_dir
+       projects_dir: projects_dir
      )}
   end
 
@@ -72,7 +71,7 @@ defmodule ClaudePlans.Web.BrowserLive do
   end
 
   def handle_event("select_file", %{"path" => rel_path}, socket) do
-    full_path = Path.join([@projects_dir, socket.assigns.selected_project, rel_path])
+    full_path = Path.join([socket.assigns.projects_dir, socket.assigns.selected_project, rel_path])
 
     case File.read(full_path) do
       {:ok, content} ->
@@ -249,12 +248,13 @@ defmodule ClaudePlans.Web.BrowserLive do
   # --- Helpers ---
 
   defp load_project(socket, dir_name) do
-    files = list_project_files(dir_name)
+    projects_dir = socket.assigns.projects_dir
+    files = list_project_files(projects_dir, dir_name)
 
     {selected_file, file_html} =
       case files do
         [first | _] ->
-          path = Path.join([@projects_dir, dir_name, first.rel_path])
+          path = Path.join([projects_dir, dir_name, first.rel_path])
           {first.rel_path, Renderer.to_html(File.read!(path))}
 
         [] ->
@@ -269,11 +269,11 @@ defmodule ClaudePlans.Web.BrowserLive do
     )
   end
 
-  defp list_projects do
-    case File.ls(@projects_dir) do
+  defp list_projects(projects_dir) do
+    case File.ls(projects_dir) do
       {:ok, dirs} ->
         dirs
-        |> Enum.filter(&File.dir?(Path.join(@projects_dir, &1)))
+        |> Enum.filter(&File.dir?(Path.join(projects_dir, &1)))
         |> Enum.map(fn dir_name ->
           candidate = "/" <> (dir_name |> String.trim_leading("-") |> String.replace("-", "/"))
 
@@ -284,7 +284,7 @@ defmodule ClaudePlans.Web.BrowserLive do
               dir_name |> String.trim_leading("-Users-#{System.get_env("USER", "user")}-")
             end
 
-          has_memory? = File.dir?(Path.join([@projects_dir, dir_name, "memory"]))
+          has_memory? = File.dir?(Path.join([projects_dir, dir_name, "memory"]))
           %{dir_name: dir_name, display_name: display, has_memory?: has_memory?}
         end)
         |> Enum.filter(& &1.has_memory?)
@@ -295,8 +295,8 @@ defmodule ClaudePlans.Web.BrowserLive do
     end
   end
 
-  defp list_project_files(dir_name) do
-    project_path = Path.join(@projects_dir, dir_name)
+  defp list_project_files(projects_dir, dir_name) do
+    project_path = Path.join(projects_dir, dir_name)
     root_files = list_md_files(project_path, nil)
     memory_files = list_md_files(Path.join(project_path, "memory"), "memory")
     (root_files ++ memory_files) |> Enum.sort_by(fn f -> {f.dir || "", f.name} end)

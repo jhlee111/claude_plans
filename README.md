@@ -46,11 +46,7 @@ mix phx.server
 
 ```elixir
 # mix.exs
-{:claude_plans, "~> 0.1", only: :dev}
-```
-
-```bash
-mix igniter.install claude_plans
+{:claude_plans, "~> 0.1.1", only: :dev}
 ```
 
 ## Command Line Options
@@ -61,6 +57,8 @@ All configuration is done via environment variables:
 |---|---|---|
 | `PORT` | `4002` | HTTP server port |
 | `NO_BROWSER` | (unset) | Set to `1` to disable auto-opening browser on launch |
+| `PLANS_DIR` | `~/.claude/plans` | Directory containing Claude Code plan files |
+| `PROJECTS_DIR` | `~/.claude/projects` | Directory containing Claude Code project directories |
 
 ### Examples
 
@@ -73,6 +71,9 @@ PORT=3000 ./claude_plans_macos_arm
 
 # Headless (no browser auto-open)
 NO_BROWSER=1 ./claude_plans_macos_arm
+
+# Custom plans directory
+PLANS_DIR=/path/to/plans ./claude_plans_macos_arm
 
 # Both
 PORT=8080 NO_BROWSER=1 ./claude_plans_macos_arm
@@ -93,13 +94,21 @@ mix phx.server
 Requires [Zig](https://ziglang.org/) (`brew install zig` on macOS).
 
 ```bash
-# Build for macOS Apple Silicon
+# Build for your native architecture
 BURRITO_TARGET=macos_arm MIX_ENV=prod mix release
 
-# Build for macOS Intel
-BURRITO_TARGET=macos_intel MIX_ENV=prod mix release
-
 # Output in burrito_out/
+```
+
+> **Note:** Cross-compilation is not supported due to native NIF dependencies (MDEx/Rust).
+> Each target must be built on its matching architecture. The GitHub Actions CI handles this
+> automatically using `macos-14` (ARM) and `macos-13` (Intel) runners.
+
+Linux and Windows targets are defined but commented out in `mix.exs` (untested). Uncomment and build on the matching platform with:
+
+```bash
+BURRITO_TARGET=linux_intel MIX_ENV=prod mix release
+BURRITO_TARGET=windows_intel MIX_ENV=prod mix release
 ```
 
 ## Architecture
