@@ -10,7 +10,10 @@ defmodule ClaudePlans.Renderer do
         autolink: true
       ],
       parse: [smart: true],
-      render: [unsafe_: true]
+      render: [unsafe_: true],
+      syntax_highlight: [
+        formatter: {:html_inline, [theme: "github_light"]}
+      ]
     )
   end
 

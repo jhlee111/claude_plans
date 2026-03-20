@@ -127,6 +127,7 @@ defmodule ClaudePlans.Web.BrowserLive do
           >
             {label}
           </button>
+          <button id="theme-toggle" class="cb-theme-toggle" phx-hook="ThemeToggle" phx-update="ignore">&#9790;</button>
         </div>
         <div class="cb-sidebar-body">
           {sidebar_content(assigns)}

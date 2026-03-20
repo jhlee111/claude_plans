@@ -17,7 +17,33 @@ defmodule ClaudePlans.Web.Layouts do
   @phoenix_js for(path <- phoenix_js_paths, do: File.read!(path)) |> Enum.join("\n")
 
   @app_js ~S"""
+  const LIGHT_MERMAID = { theme: 'base', startOnLoad: false, themeVariables: { darkMode: false, background: '#ffffff', primaryColor: '#eef2ff', primaryTextColor: '#1e293b', primaryBorderColor: '#94a3b8', lineColor: '#64748b', secondaryColor: '#f1f5f9', tertiaryColor: '#f8fafc' } };
+  const DARK_MERMAID = { theme: 'dark', startOnLoad: false };
+
+  function getTheme() {
+    const stored = localStorage.getItem('claude-plans-theme');
+    if (stored) return stored;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+  function applyTheme(t) {
+    document.documentElement.setAttribute('data-theme', t);
+    localStorage.setItem('claude-plans-theme', t);
+    if (typeof mermaid !== 'undefined') mermaid.initialize(t === 'dark' ? DARK_MERMAID : LIGHT_MERMAID);
+    document.querySelectorAll('.cb-theme-toggle').forEach(b => b.textContent = t === 'dark' ? '\u2600' : '\u263E');
+  }
+  applyTheme(getTheme());
+
   let Hooks = {};
+  Hooks.ThemeToggle = {
+    mounted() {
+      this.el.textContent = getTheme() === 'dark' ? '\u2600' : '\u263E';
+      this.el.addEventListener("click", (e) => {
+        e.preventDefault();
+        const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+        applyTheme(next);
+      });
+    }
+  };
   Hooks.CopyPath = {
     mounted() {
       this.el.addEventListener("click", (e) => {
@@ -83,7 +109,7 @@ defmodule ClaudePlans.Web.Layouts do
       <body>
         {@inner_content}
         <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
-        {raw("<script>mermaid.initialize({ startOnLoad: false, theme: 'neutral' });</script>")}
+        {raw("<script>mermaid.initialize({ startOnLoad: false });</script>")}
         {raw("<script>" <> @phoenix_js <> "</script>")}
         {raw("<script>" <> @app_js <> "</script>")}
       </body>
