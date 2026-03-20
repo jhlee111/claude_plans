@@ -1,0 +1,98 @@
+/* Claude Browser — standalone layout + VitePress-style markdown */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { color-scheme: light; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1a1a1a; background: #f8fafc; }
+
+/* Layout */
+.cb-layout { display: flex; height: 100vh; }
+.cb-sidebar { width: 280px; border-right: 1px solid #e2e8f0; overflow-y: auto; background: #fff; flex-shrink: 0; display: flex; flex-direction: column; }
+.cb-main { flex: 1; overflow-y: auto; padding: 2rem; background: #f8fafc; }
+
+/* Tab bar */
+.cb-tabs { display: flex; border-bottom: 1px solid #e2e8f0; flex-shrink: 0; }
+.cb-tab { flex: 1; padding: 0.625rem 0.75rem; font-size: 0.75rem; font-weight: 500; text-align: center; border: none; background: none; cursor: pointer; color: #64748b; transition: color 0.15s; border-bottom: 2px solid transparent; }
+.cb-tab:hover { color: #334155; }
+.cb-tab--active { color: #4338ca; border-bottom-color: #6366f1; }
+
+/* Sidebar content */
+.cb-sidebar-body { flex: 1; overflow-y: auto; padding: 0.75rem; }
+.cb-section-label { font-size: 0.65rem; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; }
+.cb-count { font-size: 0.65rem; color: #94a3b8; }
+
+/* File list buttons */
+.cb-file-row { position: relative; }
+.cb-file-btn { width: 100%; text-align: left; padding: 0.5rem 0.75rem; border-radius: 0.5rem; font-size: 0.8125rem; border: none; background: none; cursor: pointer; color: #475569; transition: background 0.1s; margin-bottom: 1px; }
+.cb-file-btn:hover { background: #f1f5f9; }
+.cb-file-btn--active { background: #eef2ff; color: #3730a3; font-weight: 500; }
+.cb-file-name { font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace; font-size: 0.6875rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cb-file-time { font-size: 0.625rem; color: #94a3b8; margin-top: 2px; }
+.cb-file-dir { color: #94a3b8; }
+.cb-copy-btn { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); font-size: 0.5625rem; color: #94a3b8; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 4px; padding: 2px 6px; cursor: pointer; opacity: 0; transition: opacity 0.15s; user-select: none; z-index: 1; }
+.cb-file-row:hover .cb-copy-btn { opacity: 1; }
+.cb-copy-btn:hover { background: #e2e8f0; color: #475569; }
+.cb-copied { background: #dcfce7 !important; color: #166534 !important; border-color: #86efac !important; }
+
+/* Project selector */
+.cb-select { width: 100%; font-size: 0.75rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 0.5rem; padding: 0.375rem 0.5rem; color: #334155; margin-bottom: 0.75rem; }
+
+/* Empty states */
+.cb-empty { text-align: center; padding: 2rem 0; color: #94a3b8; font-size: 0.8125rem; }
+.cb-empty-hint { font-size: 0.6875rem; margin-top: 0.25rem; }
+.cb-placeholder { display: flex; align-items: center; justify-content: center; height: 100%; }
+.cb-placeholder-inner { text-align: center; color: #94a3b8; }
+.cb-placeholder-title { font-size: 1.125rem; font-weight: 500; }
+.cb-placeholder-hint { font-size: 0.875rem; margin-top: 0.25rem; }
+
+/* Header bar */
+.cb-file-header { margin-bottom: 1rem; font-family: 'SF Mono', Monaco, monospace; font-size: 0.8125rem; color: #64748b; }
+.cb-content-wrap { max-width: 56rem; margin: 0 auto; }
+
+/* ================================================
+   Markdown content styles (VitePress-inspired)
+   ================================================ */
+.cp-content h1, .cp-content h2, .cp-content h3, .cp-content h4, .cp-content h5, .cp-content h6 {
+  position: relative; font-weight: 600; outline: none;
+}
+.cp-content h1 { letter-spacing: -0.02em; line-height: 40px; font-size: 28px; }
+.cp-content h2 { margin: 48px 0 16px; border-top: 1px solid #e2e8f0; padding-top: 24px; letter-spacing: -0.02em; line-height: 32px; font-size: 24px; }
+.cp-content h3 { margin: 32px 0 0; letter-spacing: -0.01em; line-height: 28px; font-size: 20px; }
+.cp-content h4 { margin: 24px 0 0; line-height: 24px; font-size: 18px; }
+.cp-content > h2:first-child { margin-top: 0; border-top: none; padding-top: 0; }
+
+.cp-content p, .cp-content summary { margin: 16px 0; }
+.cp-content p { line-height: 28px; }
+
+.cp-content a { font-weight: 500; color: #6366f1; text-decoration: underline; text-underline-offset: 2px; }
+.cp-content a:hover { color: #4f46e5; }
+.cp-content strong { font-weight: 600; }
+.cp-content em { font-style: italic; }
+
+.cp-content ul, .cp-content ol { padding-left: 1.25rem; margin: 16px 0; }
+.cp-content ul { list-style: disc; }
+.cp-content ol { list-style: decimal; }
+.cp-content li + li { margin-top: 8px; }
+.cp-content li > ol, .cp-content li > ul { margin: 8px 0 0; }
+
+.cp-content :not(pre, h1, h2, h3, h4, h5, h6) > code { font-size: 0.875em; color: #6366f1; }
+.cp-content :not(pre) > code { border-radius: 4px; padding: 3px 6px; background-color: #f6f6f7; }
+.cp-content h1 > code, .cp-content h2 > code, .cp-content h3 > code { font-size: 0.9em; }
+
+.cp-content pre { background-color: #f6f6f7; overflow-x: auto; border-radius: 8px; margin: 16px 0; }
+.cp-content pre code { display: block; padding: 20px 24px; width: fit-content; min-width: 100%; line-height: 1.7; font-size: 0.875em; color: #3c3c43; background: none; }
+
+.cp-content blockquote { margin: 16px 0; border-left: 2px solid #e2e8f0; padding-left: 16px; }
+.cp-content blockquote > p { margin: 0; font-size: 16px; color: #67676c; }
+
+.cp-content table { display: block; border-collapse: collapse; margin: 20px 0; overflow-x: auto; }
+.cp-content tr { background-color: #fff; border-top: 1px solid #e2e8f0; }
+.cp-content tr:nth-child(2n) { background-color: #f6f6f7; }
+.cp-content th, .cp-content td { border: 1px solid #e2e8f0; padding: 8px 16px; }
+.cp-content th { text-align: left; font-size: 14px; font-weight: 600; color: #67676c; background-color: #f6f6f7; }
+.cp-content td { font-size: 14px; }
+
+.cp-content hr { margin: 16px 0; border: none; border-top: 1px solid #e2e8f0; }
+.cp-content img { max-width: 100%; border-radius: 8px; margin: 16px 0; }
+
+/* Task list checkboxes */
+.cp-content input[type="checkbox"] { margin-right: 0.5em; }

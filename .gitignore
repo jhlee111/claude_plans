@@ -1,0 +1,6 @@
+/_build/
+/deps/
+/burrito_out/
+/*.beam
+/erl_crash.dump
+*.ez
