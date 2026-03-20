@@ -1,0 +1,82 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos-arm:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Erlang & Elixir
+        run: |
+          brew install erlang elixir zig xz
+          mix local.hex --force
+          mix local.rebar --force
+
+      - name: Install dependencies
+        run: MIX_ENV=prod mix deps.get
+
+      - name: Build macOS ARM binary
+        run: BURRITO_TARGET=macos_arm MIX_ENV=prod mix release
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: claude_plans_macos_arm
+          path: burrito_out/claude_plans_macos_arm
+
+  build-macos-intel:
+    runs-on: macos-13
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Erlang & Elixir
+        run: |
+          brew install erlang elixir zig xz
+          mix local.hex --force
+          mix local.rebar --force
+
+      - name: Install dependencies
+        run: MIX_ENV=prod mix deps.get
+
+      - name: Build macOS Intel binary
+        run: BURRITO_TARGET=macos_intel MIX_ENV=prod mix release
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: claude_plans_macos_intel
+          path: burrito_out/claude_plans_macos_intel
+
+  release:
+    needs: [build-macos-arm, build-macos-intel]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download macOS ARM binary
+        uses: actions/download-artifact@v4
+        with:
+          name: claude_plans_macos_arm
+          path: binaries/
+
+      - name: Download macOS Intel binary
+        uses: actions/download-artifact@v4
+        with:
+          name: claude_plans_macos_intel
+          path: binaries/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            binaries/claude_plans_macos_arm
+            binaries/claude_plans_macos_intel
