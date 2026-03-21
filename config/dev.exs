@@ -4,7 +4,13 @@ config :claude_plans, ClaudePlans.Endpoint,
   code_reloader: true,
   debug_errors: true,
   check_origin: false,
-  watchers: []
+  watchers: [],
+  live_reload: [
+    patterns: [
+      ~r"lib/claude_plans/web/.*(ex)$",
+      ~r"lib/claude_plans/web/css/.*(css)$"
+    ]
+  ]
 
 config :phoenix_live_view,
   debug_heex_annotations: true

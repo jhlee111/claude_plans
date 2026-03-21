@@ -10,6 +10,10 @@ defmodule ClaudePlans.Endpoint do
   socket("/live", Phoenix.LiveView.Socket, websocket: [connect_info: [session: @session_options]])
 
   if Mix.env() == :dev do
+    socket("/phoenix/live_reload/socket", Phoenix.LiveReloader.Socket)
+  end
+
+  if Mix.env() == :dev do
     plug(Tidewave)
 
     plug(Phoenix.LiveReloader)

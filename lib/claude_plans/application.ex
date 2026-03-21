@@ -5,8 +5,10 @@ defmodule ClaudePlans.Application do
   @impl true
   def start(_type, _args) do
     children = [
+      {Phoenix.PubSub, name: ClaudePlans.PubSub},
       {Registry, keys: :duplicate, name: ClaudePlans.Registry},
       ClaudePlans.Watcher,
+      ClaudePlans.SearchIndex,
       ClaudePlans.Endpoint
     ]
 

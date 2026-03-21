@@ -5,6 +5,7 @@ config :claude_plans,
   projects_dir: nil
 
 config :claude_plans, ClaudePlans.Endpoint,
+  pubsub_server: ClaudePlans.PubSub,
   url: [host: "localhost"],
   http: [port: String.to_integer(System.get_env("PORT") || "4002")],
   adapter: Bandit.PhoenixAdapter,

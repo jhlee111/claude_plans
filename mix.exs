@@ -10,6 +10,7 @@ defmodule ClaudePlans.MixProject do
       elixir: "~> 1.17",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
+      listeners: [Phoenix.CodeReloader],
       releases: releases(),
       name: "ClaudePlans",
       description: "Standalone viewer for Claude Code plans and project memory",

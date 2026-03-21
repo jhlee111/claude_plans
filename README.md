@@ -13,6 +13,8 @@ Browse `~/.claude/plans/` and `~/.claude/projects/*/memory/` in a clean, searcha
 - **Dark / Light mode** — Auto-detects OS preference, toggle with one click, persisted in localStorage
 - **Server-side Markdown** — Rendered via MDEx with GitHub-style syntax highlighting
 - **Mermaid diagrams** — Automatic rendering of Mermaid code blocks
+- **Full-text search** — Search across all plan and project files with instant results and in-document match highlighting
+- **Keyboard navigation** — Vim-style keys: j/k to navigate, / to search, n/N to jump between matches, ? for help overlay
 - **Live file watching** — Plans auto-reload when files change on disk
 - **Copy path** — Hover any file to copy its absolute path to clipboard
 - **Self-contained** — No Tailwind, no Node.js, no asset pipeline. CSS and JS embedded at compile time
