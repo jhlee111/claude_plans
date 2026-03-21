@@ -39,7 +39,8 @@ defmodule ClaudePlans.MixProject do
       {:file_system, "~> 1.0"},
       {:phoenix_live_reload, "~> 1.2", only: :dev},
       {:burrito, "~> 1.5", only: :prod},
-      {:ex_doc, "~> 0.35", only: :dev, runtime: false}
+      {:ex_doc, "~> 0.35", only: :dev, runtime: false},
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
     ]
   end
 
@@ -57,9 +58,9 @@ defmodule ClaudePlans.MixProject do
         steps: [:assemble] ++ burrito_steps(),
         burrito: [
           targets: [
-            macos_arm: [os: :darwin, cpu: :aarch64],
-            macos_intel: [os: :darwin, cpu: :x86_64]
-            # Untested — uncomment to build for Linux/Windows:
+            macos_arm: [os: :darwin, cpu: :aarch64]
+            # Uncomment to build for other platforms (requires matching native runner):
+            # macos_intel: [os: :darwin, cpu: :x86_64],
             # linux_arm: [os: :linux, cpu: :aarch64],
             # linux_intel: [os: :linux, cpu: :x86_64],
             # windows_intel: [os: :windows, cpu: :x86_64]

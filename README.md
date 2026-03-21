@@ -26,7 +26,7 @@ Download the latest binary from [Releases](https://github.com/jhlee111/claude_pl
 
 ```bash
 # macOS Apple Silicon
-curl -L -o claude-plans https://github.com/jhlee111/claude_plans/releases/download/v0.1.1/claude_plans_macos_arm
+curl -L -o claude-plans https://github.com/jhlee111/claude_plans/releases/download/v0.1.2/claude_plans_macos_arm
 chmod +x claude-plans
 ./claude-plans
 # Opens http://localhost:4002 in your browser

@@ -1,0 +1,41 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.1.2] - 2026-03-20
+
+### Added
+- `PLANS_DIR` and `PROJECTS_DIR` environment variables for custom directory paths
+- Linux and Windows Burrito targets (commented out, untested)
+
+### Changed
+- Projects directory is now configurable at runtime instead of hardcoded
+
+### Fixed
+- README: removed undocumented `mix igniter.install` command
+- README: corrected Hex version spec from `~> 0.1` to `~> 0.1.1`
+- README: added cross-compilation limitation note for NIF dependencies
+
+## [0.1.1] - 2026-03-19
+
+### Added
+- GitHub Actions CI/CD for automated release builds (ARM + Intel)
+- ExDoc configuration for API documentation
+- CLI options documentation in README
+
+## [0.1.0] - 2026-03-19
+
+### Added
+- Plans tab: browse and read Claude Code plan files with live updates
+- Projects tab: browse project memory files across all Claude Code projects
+- Dark/light mode with OS preference detection and localStorage persistence
+- Server-side Markdown rendering via MDEx with `github_light` syntax highlighting
+- Mermaid diagram rendering with light/dark theme support
+- Live file watching with 300ms debounce via FileSystem GenServer
+- Copy path to clipboard on hover
+- Self-contained CSS/JS embedded at compile time (Clarity pattern)
+- Standalone binary packaging via Burrito (macOS ARM + Intel)
+- Registry-based PubSub with `:duplicate` keys

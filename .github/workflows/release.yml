@@ -8,17 +8,19 @@ on:
 permissions:
   contents: write
 
+env:
+  SIGNING_IDENTITY: "Developer ID Application: Jung Hoon Lee (LPT442F2X5)"
+  NOTARY_PROFILE: "dictto-notarization"
+
 jobs:
-  build-macos-arm:
-    runs-on: macos-14
+  build-and-release:
+    runs-on: [self-hosted, macOS]
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Erlang & Elixir
-        run: |
-          brew install erlang elixir zig xz
-          mix local.hex --force
-          mix local.rebar --force
+      - name: Extract version
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
       - name: Install dependencies
         run: MIX_ENV=prod mix deps.get
@@ -26,57 +28,51 @@ jobs:
       - name: Build macOS ARM binary
         run: BURRITO_TARGET=macos_arm MIX_ENV=prod mix release
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: claude_plans_macos_arm
-          path: burrito_out/claude_plans_macos_arm
-
-  build-macos-intel:
-    runs-on: macos-13
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Erlang & Elixir
+      - name: Sign binary
         run: |
-          brew install erlang elixir zig xz
-          mix local.hex --force
-          mix local.rebar --force
+          codesign --force --sign "${{ env.SIGNING_IDENTITY }}" \
+            --options runtime --timestamp \
+            burrito_out/claude_plans_macos_arm
 
-      - name: Install dependencies
-        run: MIX_ENV=prod mix deps.get
+          codesign --verify --verbose burrito_out/claude_plans_macos_arm
 
-      - name: Build macOS Intel binary
-        run: BURRITO_TARGET=macos_intel MIX_ENV=prod mix release
+      - name: Create DMG
+        run: |
+          brew install create-dmg 2>/dev/null || true
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: claude_plans_macos_intel
-          path: burrito_out/claude_plans_macos_intel
+          DMG_NAME="ClaudePlans_${{ steps.version.outputs.version }}_macos_arm.dmg"
+          STAGING_DIR=$(mktemp -d)
 
-  release:
-    needs: [build-macos-arm, build-macos-intel]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+          cp burrito_out/claude_plans_macos_arm "$STAGING_DIR/"
 
-      - name: Download macOS ARM binary
-        uses: actions/download-artifact@v4
-        with:
-          name: claude_plans_macos_arm
-          path: binaries/
+          create-dmg \
+            --volname "Claude Plans" \
+            --window-pos 200 120 \
+            --window-size 600 400 \
+            --icon "claude_plans_macos_arm" 150 200 \
+            --hide-extension "claude_plans_macos_arm" \
+            --no-internet-enable \
+            "$DMG_NAME" \
+            "$STAGING_DIR/" || true
 
-      - name: Download macOS Intel binary
-        uses: actions/download-artifact@v4
-        with:
-          name: claude_plans_macos_intel
-          path: binaries/
+          codesign --force --sign "${{ env.SIGNING_IDENTITY }}" --timestamp "$DMG_NAME"
+
+      - name: Notarize DMG
+        run: |
+          DMG_NAME="ClaudePlans_${{ steps.version.outputs.version }}_macos_arm.dmg"
+
+          xcrun notarytool submit "$DMG_NAME" \
+            --keychain-profile "${{ env.NOTARY_PROFILE }}" \
+            --wait
+
+          xcrun stapler staple "$DMG_NAME"
+
+          spctl --assess --type open --context context:primary-signature --verbose=2 "$DMG_NAME"
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
           files: |
-            binaries/claude_plans_macos_arm
-            binaries/claude_plans_macos_intel
+            burrito_out/claude_plans_macos_arm
+            ClaudePlans_${{ steps.version.outputs.version }}_macos_arm.dmg
