@@ -12,6 +12,8 @@ permissions:
 jobs:
   build-and-release:
     runs-on: macos-14
+    env:
+      MIX_ENV: prod
     steps:
       - uses: actions/checkout@v4
 
@@ -28,16 +30,29 @@ jobs:
           fi
 
       - name: Install Erlang & Elixir
-        run: |
-          brew install erlang elixir zig xz
-          mix local.hex --force
-          mix local.rebar --force
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27'
+          elixir-version: '1.17'
+
+      - name: Install zig
+        run: brew install zig
+
+      - name: Cache deps and build
+        uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+          key: ${{ runner.os }}-mix-prod-${{ hashFiles('mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-mix-prod-
 
       - name: Install dependencies
-        run: MIX_ENV=prod mix deps.get
+        run: mix deps.get
 
       - name: Build macOS ARM binary
-        run: BURRITO_TARGET=macos_arm MIX_ENV=prod mix release
+        run: BURRITO_TARGET=macos_arm mix release
 
       - name: Create Release
         if: steps.version.outputs.is_tag == 'true'
