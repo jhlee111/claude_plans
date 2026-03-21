@@ -12,10 +12,6 @@ if config_env() == :prod do
     open_browser: System.get_env("NO_BROWSER") != "1"
 end
 
-if plans_dir = System.get_env("PLANS_DIR") do
-  config :claude_plans, plans_dir: Path.expand(plans_dir)
-end
-
-if projects_dir = System.get_env("PROJECTS_DIR") do
-  config :claude_plans, projects_dir: Path.expand(projects_dir)
-end
+config :claude_plans,
+  plans_dir: Path.expand(System.get_env("PLANS_DIR") || "~/.claude/plans"),
+  projects_dir: Path.expand(System.get_env("PROJECTS_DIR") || "~/.claude/projects")

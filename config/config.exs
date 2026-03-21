@@ -1,8 +1,8 @@
 import Config
 
 config :claude_plans,
-  plans_dir: Path.expand("~/.claude/plans"),
-  projects_dir: Path.expand("~/.claude/projects")
+  plans_dir: nil,
+  projects_dir: nil
 
 config :claude_plans, ClaudePlans.Endpoint,
   url: [host: "localhost"],
