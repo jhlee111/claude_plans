@@ -359,8 +359,15 @@ defmodule ClaudePlans.Web.BrowserLive do
         socket = assign(socket, versions: versions)
 
         # If in diff mode, recompute diff with current selections
-        if socket.assigns.view_mode == :diff && socket.assigns.diff_version_a && socket.assigns.diff_version_b do
-          diff_html = VersionStore.diff(selected, socket.assigns.diff_version_a, socket.assigns.diff_version_b)
+        if socket.assigns.view_mode == :diff && socket.assigns.diff_version_a &&
+             socket.assigns.diff_version_b do
+          diff_html =
+            VersionStore.diff(
+              selected,
+              socket.assigns.diff_version_a,
+              socket.assigns.diff_version_b
+            )
+
           assign(socket, diff_html: diff_html)
         else
           socket

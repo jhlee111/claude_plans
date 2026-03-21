@@ -11,12 +11,14 @@ Browse `~/.claude/plans/` and `~/.claude/projects/*/memory/` in a clean, searcha
 ## Features
 
 - **Plans tab** — Browse and read Claude Code plan files with live updates
+- **Version history** — Automatic snapshots on each file change with persistent history
+- **Diff view** — Side-by-side line-level diff between any two plan versions with hunk collapsing
 - **Projects tab** — Browse project memory files across all Claude Code projects
 - **Dark / Light mode** — Auto-detects OS preference, toggle with one click, persisted in localStorage
 - **Server-side Markdown** — Rendered via MDEx with GitHub-style syntax highlighting
 - **Mermaid diagrams** — Automatic rendering of Mermaid code blocks
 - **Full-text search** — Search across all plan and project files with instant results and in-document match highlighting
-- **Keyboard navigation** — Vim-style keys: j/k to navigate, / to search, n/N to jump between matches, ? for help overlay
+- **Keyboard navigation** — Vim-style keys: j/k to navigate, / to search, n/N to jump between matches, d to toggle diff, v to toggle version history, ? for help overlay
 - **Live file watching** — Plans auto-reload when files change on disk
 - **Copy path** — Hover any file to copy its absolute path to clipboard
 - **Self-contained** — No Tailwind, no Node.js, no asset pipeline. CSS and JS embedded at compile time
