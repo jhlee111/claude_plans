@@ -9,14 +9,14 @@ defmodule ClaudePlans.Endpoint do
 
   socket("/live", Phoenix.LiveView.Socket, websocket: [connect_info: [session: @session_options]])
 
+  if Mix.env() == :dev do
+    plug(Tidewave)
+  end
+
   if code_reloading? do
     socket("/phoenix/live_reload/socket", Phoenix.LiveReloader.Socket)
     plug(Phoenix.LiveReloader)
     plug(Phoenix.CodeReloader)
-  end
-
-  if Mix.env() == :dev do
-    plug(Tidewave)
   end
 
   plug(Plug.Parsers,
