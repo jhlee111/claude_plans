@@ -21,7 +21,15 @@ jobs:
 
       - name: Extract version
         id: version
-        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+            echo "is_tag=true" >> $GITHUB_OUTPUT
+          else
+            VERSION=$(grep '@version' mix.exs | head -1 | sed 's/.*"\(.*\)".*/\1/')
+            echo "version=${VERSION}" >> $GITHUB_OUTPUT
+            echo "is_tag=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Install dependencies
         run: MIX_ENV=prod mix deps.get
@@ -71,6 +79,7 @@ jobs:
           spctl --assess --type open --context context:primary-signature --verbose=2 "$DMG_NAME"
 
       - name: Create Release
+        if: steps.version.outputs.is_tag == 'true'
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
