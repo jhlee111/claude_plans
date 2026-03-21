@@ -48,13 +48,6 @@ mix phx.server
 # Visit http://localhost:4002
 ```
 
-### As a Hex Package (Phoenix projects)
-
-```elixir
-# mix.exs
-{:claude_plans, "~> 0.1.1", only: :dev}
-```
-
 ## Command Line Options
 
 All configuration is done via environment variables:
