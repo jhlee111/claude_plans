@@ -6,6 +6,8 @@ Browse `~/.claude/plans/` and `~/.claude/projects/*/memory/` in a clean, searcha
 
 ![Claude Plans Preview](assets/preview.png)
 
+![Search](assets/search.png)
+
 ## Features
 
 - **Plans tab** — Browse and read Claude Code plan files with live updates
