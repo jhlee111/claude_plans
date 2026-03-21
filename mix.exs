@@ -16,7 +16,8 @@ defmodule ClaudePlans.MixProject do
       description: "Standalone viewer for Claude Code plans and project memory",
       source_url: "https://github.com/jhlee111/claude_plans",
       homepage_url: "https://github.com/jhlee111/claude_plans",
-      docs: docs()
+      docs: docs(),
+      listeners: [Phoenix.CodeReloader]
     ]
   end
 
