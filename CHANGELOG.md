@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-03-21
+
+### Added
+- Full-text search across all plan and project memory files with instant results
+- In-document match highlighting with navigation between matches (n/N)
+- Vim-style keyboard navigation: j/k to move, Enter/l to open, gg/G to jump, / to search
+- Keyboard shortcuts help overlay (press ?)
+- Navigation between search result documents with ] and [
+- Phoenix PubSub for internal messaging
+- Live reload in dev mode for faster development
+
+### Changed
+- Sidebar now shows search results inline when a query is active
+
 ## [0.1.5] - 2026-03-21
 
 ### Fixed
