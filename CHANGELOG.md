@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-03-21
+
+### Added
+- Plan version history with automatic snapshots on each file change
+- Diff view comparing any two plan versions with line-level ins/del highlighting and hunk collapsing
+- Persistent version storage in `.history/` JSON files (survives app restarts)
+- Render cache with ETS-backed parallel pre-rendering for instant plan switching
+- Keyboard shortcuts: `d` to toggle diff view, `v` to toggle version history panel
+- Version comparison dropdowns to diff arbitrary version pairs
+
+### Fixed
+- Tidewave plug ordering — moved before `code_reloading?` block
+- Live reload socket setup now uses `code_reloading?` guard
+
 ## [0.2.0] - 2026-03-21
 
 ### Added

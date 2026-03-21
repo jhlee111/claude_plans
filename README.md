@@ -39,7 +39,7 @@ claude-plans
 
 ```bash
 # macOS Apple Silicon
-curl -L -o claude-plans https://github.com/jhlee111/claude_plans/releases/download/v0.2.0/claude_plans_macos_arm
+curl -L -o claude-plans https://github.com/jhlee111/claude_plans/releases/download/v0.3.0/claude_plans_macos_arm
 chmod +x claude-plans
 ./claude-plans
 ```
