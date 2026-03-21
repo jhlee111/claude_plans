@@ -2,8 +2,9 @@ defmodule ClaudePlans.Web.BrowserLive do
   use Phoenix.LiveView
 
   alias ClaudePlans.Watcher
-  alias ClaudePlans.Renderer
+  alias ClaudePlans.RenderCache
   alias ClaudePlans.SearchIndex
+  alias ClaudePlans.VersionStore
 
   @impl true
   def mount(_params, _session, socket) do
@@ -15,7 +16,7 @@ defmodule ClaudePlans.Web.BrowserLive do
 
     {selected, html} =
       case plans do
-        [first | _] -> {first.filename, Renderer.to_html(File.read!(first.path))}
+        [first | _] -> {first.filename, RenderCache.render(File.read!(first.path))}
         [] -> {nil, nil}
       end
 
@@ -35,7 +36,13 @@ defmodule ClaudePlans.Web.BrowserLive do
        search_results: [],
        highlight_index: nil,
        content_highlight: nil,
-       show_help: false
+       show_help: false,
+       view_mode: :rendered,
+       diff_html: nil,
+       versions: [],
+       diff_version_a: nil,
+       diff_version_b: nil,
+       show_versions: false
      )}
   end
 
@@ -64,11 +71,26 @@ defmodule ClaudePlans.Web.BrowserLive do
 
     case File.read(path) do
       {:ok, content} ->
+        VersionStore.snapshot(filename)
+        versions = VersionStore.list_versions(filename)
+
+        # Pre-render nearby plans in background
+        plans = socket.assigns.plans
+        idx = Enum.find_index(plans, &(&1.filename == filename)) || 0
+        nearby_paths = Enum.map(plans, & &1.path)
+        RenderCache.prerender_nearby(nearby_paths, idx)
+
         {:noreply,
          assign(socket,
            selected: filename,
-           html: Renderer.to_html(content),
-           content_highlight: nil
+           html: RenderCache.render(content),
+           content_highlight: nil,
+           versions: versions,
+           view_mode: :rendered,
+           diff_html: nil,
+           diff_version_a: nil,
+           diff_version_b: nil,
+           show_versions: false
          )}
 
       {:error, _} ->
@@ -88,10 +110,17 @@ defmodule ClaudePlans.Web.BrowserLive do
 
     case File.read(full_path) do
       {:ok, content} ->
+        # Pre-render nearby project files in background
+        project_files = socket.assigns.project_files
+        idx = Enum.find_index(project_files, &(&1.rel_path == rel_path)) || 0
+        base = Path.join(socket.assigns.projects_dir, socket.assigns.selected_project)
+        nearby_paths = Enum.map(project_files, &Path.join(base, &1.rel_path))
+        RenderCache.prerender_nearby(nearby_paths, idx)
+
         {:noreply,
          assign(socket,
            selected_file: rel_path,
-           file_html: Renderer.to_html(content),
+           file_html: RenderCache.render(content),
            content_highlight: nil
          )}
 
@@ -112,6 +141,12 @@ defmodule ClaudePlans.Web.BrowserLive do
         results = SearchIndex.search(query)
         {results, if(results != [], do: 0, else: nil)}
       end
+
+    # Pre-render search result files in background
+    if results != [] do
+      paths = search_result_paths(results, socket.assigns.projects_dir)
+      RenderCache.prerender(paths)
+    end
 
     {:noreply,
      assign(socket,
@@ -145,6 +180,45 @@ defmodule ClaudePlans.Web.BrowserLive do
       nil -> {:noreply, socket}
       result -> select_search_result(socket, result, idx)
     end
+  end
+
+  # --- Diff / Version History ---
+
+  def handle_event("toggle_diff", _params, socket) do
+    case socket.assigns.view_mode do
+      :rendered when length(socket.assigns.versions) >= 2 ->
+        [latest, previous | _] = socket.assigns.versions
+        diff_html = VersionStore.diff(socket.assigns.selected, previous.id, latest.id)
+
+        {:noreply,
+         assign(socket,
+           view_mode: :diff,
+           diff_html: diff_html,
+           diff_version_a: previous.id,
+           diff_version_b: latest.id
+         )}
+
+      :diff ->
+        {:noreply, assign(socket, view_mode: :rendered)}
+
+      _ ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("toggle_versions", _params, socket) do
+    {:noreply, assign(socket, show_versions: !socket.assigns.show_versions)}
+  end
+
+  def handle_event("select_diff_versions", %{"version_a" => id_a, "version_b" => id_b}, socket) do
+    diff_html = VersionStore.diff(socket.assigns.selected, id_a, id_b)
+
+    {:noreply,
+     assign(socket,
+       diff_html: diff_html,
+       diff_version_a: id_a,
+       diff_version_b: id_b
+     )}
   end
 
   # --- Keyboard Navigation ---
@@ -205,6 +279,12 @@ defmodule ClaudePlans.Web.BrowserLive do
   def handle_event("kb_escape", _params, socket) do
     socket =
       cond do
+        socket.assigns.view_mode == :diff ->
+          assign(socket, view_mode: :rendered)
+
+        socket.assigns.show_versions ->
+          assign(socket, show_versions: false)
+
         socket.assigns.show_help ->
           assign(socket, show_help: false)
 
@@ -256,21 +336,40 @@ defmodule ClaudePlans.Web.BrowserLive do
         case Enum.find(plans, &(&1.filename == socket.assigns.selected)) do
           nil ->
             case plans do
-              [first | _] -> {first.filename, Renderer.to_html(File.read!(first.path))}
+              [first | _] -> {first.filename, RenderCache.render(File.read!(first.path))}
               [] -> {nil, nil}
             end
 
           plan ->
-            {plan.filename, Renderer.to_html(File.read!(plan.path))}
+            {plan.filename, RenderCache.render(File.read!(plan.path))}
         end
       else
         case plans do
-          [first | _] -> {first.filename, Renderer.to_html(File.read!(first.path))}
+          [first | _] -> {first.filename, RenderCache.render(File.read!(first.path))}
           [] -> {nil, nil}
         end
       end
 
-    {:noreply, assign(socket, plans: plans, selected: selected, html: html, highlight_index: nil)}
+    socket = assign(socket, plans: plans, selected: selected, html: html, highlight_index: nil)
+
+    # Refresh versions for selected plan
+    socket =
+      if selected do
+        versions = VersionStore.list_versions(selected)
+        socket = assign(socket, versions: versions)
+
+        # If in diff mode, recompute diff with current selections
+        if socket.assigns.view_mode == :diff && socket.assigns.diff_version_a && socket.assigns.diff_version_b do
+          diff_html = VersionStore.diff(selected, socket.assigns.diff_version_a, socket.assigns.diff_version_b)
+          assign(socket, diff_html: diff_html)
+        else
+          socket
+        end
+      else
+        assign(socket, versions: [], view_mode: :rendered, diff_html: nil)
+      end
+
+    {:noreply, socket}
   end
 
   # --- Render ---
@@ -330,6 +429,8 @@ defmodule ClaudePlans.Web.BrowserLive do
             <dt><kbd>n</kbd> <kbd>N</kbd></dt><dd>Next / prev match in doc</dd>
             <dt><kbd>]</kbd> <kbd>[</kbd></dt><dd>Next / prev search result</dd>
             <dt><kbd>Ctrl+d</kbd> <kbd>Ctrl+u</kbd></dt><dd>Scroll content down / up</dd>
+            <dt><kbd>d</kbd></dt><dd>Toggle diff view</dd>
+            <dt><kbd>v</kbd></dt><dd>Toggle version history</dd>
             <dt><kbd>1</kbd> <kbd>2</kbd></dt><dd>Plans / Projects tab</dd>
             <dt><kbd>?</kbd></dt><dd>Toggle this help</dd>
           </dl>
@@ -437,8 +538,61 @@ defmodule ClaudePlans.Web.BrowserLive do
   defp main_content(%{active_tab: :plans} = assigns) do
     ~H"""
     <div :if={@html} class="cb-content-wrap">
-      <div class="cb-file-header">{@selected}</div>
-      <div id="plan-content" class="cp-content" phx-hook="Mermaid" phx-update="replace" data-highlight={@content_highlight}>
+      <div class="cb-content-header">
+        <div class="cb-file-header">{@selected}</div>
+        <div class="cb-header-actions">
+          <button
+            :if={length(@versions) >= 2}
+            phx-click="toggle_diff"
+            class={"cb-action-btn#{if @view_mode == :diff, do: " cb-action-btn--active", else: ""}"}
+          >
+            Diff
+          </button>
+          <button
+            :if={@versions != []}
+            phx-click="toggle_versions"
+            class={"cb-action-btn#{if @show_versions, do: " cb-action-btn--active", else: ""}"}
+          >
+            History ({length(@versions)})
+          </button>
+        </div>
+      </div>
+      <div :if={@show_versions} class="cb-version-panel">
+        <div :for={{v, idx} <- Enum.with_index(@versions)} class="cb-version-item">
+          <span class="cb-version-time">v{length(@versions) - idx}</span>
+          <span class="cb-version-time">{format_version_time(v.timestamp)}</span>
+          <span class="cb-version-size">{format_bytes(v.byte_size)}</span>
+          <span class="cb-version-id">{v.id}</span>
+        </div>
+      </div>
+      <div :if={@view_mode == :diff} class="cb-diff-controls">
+        <form phx-change="select_diff_versions">
+          <span>Compare</span>
+          <select name="version_a">
+            <option
+              :for={{v, idx} <- Enum.with_index(@versions)}
+              value={v.id}
+              selected={@diff_version_a == v.id}
+            >
+              v{length(@versions) - idx} ({v.id})
+            </option>
+          </select>
+          <span>vs</span>
+          <select name="version_b">
+            <option
+              :for={{v, idx} <- Enum.with_index(@versions)}
+              value={v.id}
+              selected={@diff_version_b == v.id}
+            >
+              v{length(@versions) - idx} ({v.id})
+            </option>
+          </select>
+        </form>
+      </div>
+      <div :if={@view_mode == :diff && @diff_html} class="cb-diff-view">
+        {Phoenix.HTML.raw(@diff_html)}
+      </div>
+      <div :if={@view_mode == :rendered} id="plan-content" class="cp-content" phx-hook="Mermaid" phx-update="replace" data-highlight={@content_highlight}>
         {Phoenix.HTML.raw(@html)}
       </div>
     </div>
@@ -524,7 +678,7 @@ defmodule ClaudePlans.Web.BrowserLive do
          assign(socket,
            active_tab: :plans,
            selected: result.filename,
-           html: Renderer.to_html(content),
+           html: RenderCache.render(content),
            highlight_index: idx,
            content_highlight: highlight
          )}
@@ -552,7 +706,7 @@ defmodule ClaudePlans.Web.BrowserLive do
          assign(socket,
            active_tab: :projects,
            selected_file: rel,
-           file_html: Renderer.to_html(content),
+           file_html: RenderCache.render(content),
            highlight_index: idx,
            content_highlight: highlight
          )}
@@ -565,6 +719,16 @@ defmodule ClaudePlans.Web.BrowserLive do
   defp source_label(%{source: :plan}), do: "plan"
   defp source_label(%{source: :project, project: proj}), do: "project: #{proj}"
 
+  defp search_result_paths(results, projects_dir) do
+    Enum.map(results, fn
+      %{source: :plan, filename: filename} ->
+        Path.join(ClaudePlans.plans_dir(), filename)
+
+      %{source: :project, project: proj, rel_path: rel} ->
+        Path.join([projects_dir, proj, rel])
+    end)
+  end
+
   defp load_project(socket, dir_name) do
     projects_dir = socket.assigns.projects_dir
     files = list_project_files(projects_dir, dir_name)
@@ -573,11 +737,15 @@ defmodule ClaudePlans.Web.BrowserLive do
       case files do
         [first | _] ->
           path = Path.join([projects_dir, dir_name, first.rel_path])
-          {first.rel_path, Renderer.to_html(File.read!(path))}
+          {first.rel_path, RenderCache.render(File.read!(path))}
 
         [] ->
           {nil, nil}
       end
+
+    # Pre-render all project files in background
+    all_paths = Enum.map(files, &Path.join([projects_dir, dir_name, &1.rel_path]))
+    RenderCache.prerender(all_paths)
 
     assign(socket,
       selected_project: dir_name,
@@ -637,5 +805,16 @@ defmodule ClaudePlans.Web.BrowserLive do
 
   defp format_time(posix_time) when is_integer(posix_time) do
     posix_time |> DateTime.from_unix!() |> Calendar.strftime("%b %d, %H:%M")
+  end
+
+  defp format_version_time(%DateTime{} = dt) do
+    Calendar.strftime(dt, "%b %d, %H:%M")
+  end
+
+  defp format_bytes(bytes) when is_integer(bytes) do
+    cond do
+      bytes >= 1024 -> "#{Float.round(bytes / 1024, 1)} KB"
+      true -> "#{bytes} B"
+    end
   end
 end

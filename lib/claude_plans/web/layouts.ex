@@ -258,6 +258,14 @@ defmodule ClaudePlans.Web.Layouts do
             this.pushEvent("kb_prev_result", {});
             e.preventDefault();
             break;
+          case 'd':
+            this.pushEvent("toggle_diff", {});
+            e.preventDefault();
+            break;
+          case 'v':
+            this.pushEvent("toggle_versions", {});
+            e.preventDefault();
+            break;
           case '?':
             this.pushEvent("kb_help", {});
             e.preventDefault();

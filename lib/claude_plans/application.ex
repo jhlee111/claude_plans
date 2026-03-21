@@ -7,8 +7,11 @@ defmodule ClaudePlans.Application do
     children = [
       {Phoenix.PubSub, name: ClaudePlans.PubSub},
       {Registry, keys: :duplicate, name: ClaudePlans.Registry},
+      {Task.Supervisor, name: ClaudePlans.TaskSupervisor},
       ClaudePlans.Watcher,
+      ClaudePlans.VersionStore,
       ClaudePlans.SearchIndex,
+      ClaudePlans.RenderCache,
       ClaudePlans.Endpoint
     ]
 
