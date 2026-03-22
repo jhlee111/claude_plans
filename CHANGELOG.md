@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-03-21
+
+### Added
+- Open files in external editor via `PLUG_EDITOR` env var (`e` shortcut or "Edit" button)
+- Delete plan and project files with confirmation (`x` shortcut or delete button)
+- File action buttons (Edit, Copy, Delete) grouped on hover
+
+### Changed
+- Dark mode redesigned with true black background for improved contrast
+- Dark mode code blocks use CSS invert for automatic syntax theme adaptation
+- CI workflow uses `setup-zig` action and caches Burrito ERTS downloads for faster builds
+- CI workflow uses `erlef/setup-beam` with prebuilt binaries instead of `brew install`
+
+### Fixed
+- Compiler warning in layouts module
+- CI Zig version updated to 0.15.2 (required by Burrito 1.5.0)
+
 ## [0.3.0] - 2026-03-21
 
 ### Added
