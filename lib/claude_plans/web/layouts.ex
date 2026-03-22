@@ -170,6 +170,7 @@ defmodule ClaudePlans.Web.Layouts do
     mounted() {
       this._pendingG = false;
       this.handleKeyDown = (e) => {
+        if (!document.hasFocus()) return;
         const tag = document.activeElement?.tagName;
         if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
           if (e.key === 'Escape') {
