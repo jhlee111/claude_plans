@@ -60,6 +60,23 @@ defmodule ClaudePlans.Web.Layouts do
       });
     }
   };
+  Hooks.TimeAgo = {
+    mounted() { this.render(); this._interval = setInterval(() => this.render(), 30000); },
+    updated() { this.render(); },
+    render() {
+      const ts = this.el.dataset.timestamp;
+      if (!ts) return;
+      const diff = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
+      let text;
+      if (diff < 10) text = "just now";
+      else if (diff < 60) text = diff + "s ago";
+      else if (diff < 3600) text = Math.floor(diff / 60) + "m ago";
+      else if (diff < 86400) text = Math.floor(diff / 3600) + "h ago";
+      else text = Math.floor(diff / 86400) + "d ago";
+      this.el.textContent = text;
+    },
+    destroyed() { if (this._interval) clearInterval(this._interval); }
+  };
   Hooks.Mermaid = {
     mounted() { this.render(); },
     updated() { this.render(); },
@@ -164,7 +181,7 @@ defmodule ClaudePlans.Web.Layouts do
   };
   function scrollHighlightedIntoView() {
     setTimeout(() => {
-      const el = document.querySelector('.cb-file-btn--highlighted');
+      const el = document.querySelector('.cb-file-btn--active');
       if (el) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }, 50);
   }
@@ -204,6 +221,9 @@ defmodule ClaudePlans.Web.Layouts do
           this._pendingG = false;
           if (e.key === 'g') { this.pushEvent("kb_navigate", {direction: "top"}); scrollHighlightedIntoView(); e.preventDefault(); }
           return;
+        }
+        if (document.activeElement && document.activeElement !== document.body) {
+          document.activeElement.blur();
         }
         switch(e.key) {
           case 'j':
@@ -245,6 +265,10 @@ defmodule ClaudePlans.Web.Layouts do
             break;
           case '2':
             this.pushEvent("kb_tab", {tab: "projects"});
+            e.preventDefault();
+            break;
+          case '3':
+            this.pushEvent("kb_tab", {tab: "activity"});
             e.preventDefault();
             break;
           case 'n':

@@ -12,6 +12,7 @@ defmodule ClaudePlans.Application do
       ClaudePlans.VersionStore,
       ClaudePlans.SearchIndex,
       ClaudePlans.RenderCache,
+      ClaudePlans.ActivityFeed,
       ClaudePlans.Endpoint
     ]
 

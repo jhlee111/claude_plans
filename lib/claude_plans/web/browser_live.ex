@@ -7,10 +7,14 @@ defmodule ClaudePlans.Web.BrowserLive do
   alias ClaudePlans.RenderCache
   alias ClaudePlans.SearchIndex
   alias ClaudePlans.VersionStore
+  alias ClaudePlans.ActivityFeed
 
   @impl true
   def mount(_params, _session, socket) do
-    if connected?(socket), do: Watcher.subscribe()
+    if connected?(socket) do
+      Watcher.subscribe()
+      ActivityFeed.subscribe()
+    end
 
     plans = Watcher.list_plans()
     projects_dir = ClaudePlans.projects_dir()
@@ -36,7 +40,6 @@ defmodule ClaudePlans.Web.BrowserLive do
        projects_dir: projects_dir,
        search_query: "",
        search_results: [],
-       highlight_index: nil,
        content_highlight: nil,
        show_help: false,
        view_mode: :rendered,
@@ -45,7 +48,9 @@ defmodule ClaudePlans.Web.BrowserLive do
        diff_version_a: nil,
        diff_version_b: nil,
        show_versions: false,
-       font_size: 16
+       font_size: 16,
+       activity_events: ActivityFeed.list_events(),
+       unseen_activity_count: 0
      )}
   end
 
@@ -66,7 +71,14 @@ defmodule ClaudePlans.Web.BrowserLive do
           socket
       end
 
-    {:noreply, assign(socket, active_tab: tab, highlight_index: nil, content_highlight: nil)}
+    socket =
+      if tab == :activity do
+        assign(socket, unseen_activity_count: 0)
+      else
+        socket
+      end
+
+    {:noreply, assign(socket, active_tab: tab, content_highlight: nil)}
   end
 
   def handle_event("select_plan", %{"filename" => filename}, socket) do
@@ -137,13 +149,7 @@ defmodule ClaudePlans.Web.BrowserLive do
   def handle_event("search", %{"query" => query}, socket) do
     query = String.trim(query)
 
-    {results, highlight_index} =
-      if query == "" do
-        {[], nil}
-      else
-        results = SearchIndex.search(query)
-        {results, if(results != [], do: 0, else: nil)}
-      end
+    results = if query == "", do: [], else: SearchIndex.search(query)
 
     # Pre-render search result files in background
     if results != [] do
@@ -155,7 +161,6 @@ defmodule ClaudePlans.Web.BrowserLive do
      assign(socket,
        search_query: query,
        search_results: results,
-       highlight_index: highlight_index,
        content_highlight: nil
      )}
   end
@@ -171,7 +176,6 @@ defmodule ClaudePlans.Web.BrowserLive do
      assign(socket,
        search_query: "",
        search_results: [],
-       highlight_index: nil,
        content_highlight: nil
      )}
   end
@@ -181,7 +185,7 @@ defmodule ClaudePlans.Web.BrowserLive do
 
     case Enum.at(socket.assigns.search_results, idx) do
       nil -> {:noreply, socket}
-      result -> select_search_result(socket, result, idx)
+      result -> select_search_result(socket, result)
     end
   end
 
@@ -229,7 +233,13 @@ defmodule ClaudePlans.Web.BrowserLive do
   def handle_event("kb_navigate", %{"direction" => dir}, socket) do
     list = visible_list(socket)
     max_idx = max(length(list) - 1, 0)
-    current = socket.assigns.highlight_index
+
+    current =
+      if socket.assigns.search_query != "" do
+        current_search_result_index(socket)
+      else
+        current_selection_index(socket)
+      end
 
     new_idx =
       case {dir, current} do
@@ -244,19 +254,32 @@ defmodule ClaudePlans.Web.BrowserLive do
         {"up", i} -> i - 1
       end
 
-    if socket.assigns.search_query != "" and new_idx != nil do
+    if new_idx != nil do
       case Enum.at(list, new_idx) do
-        nil -> {:noreply, assign(socket, highlight_index: new_idx)}
-        result -> select_search_result(socket, result, new_idx)
+        nil ->
+          {:noreply, socket}
+
+        item ->
+          if socket.assigns.search_query != "" do
+            select_search_result(socket, item)
+          else
+            select_visible_item(socket, item)
+          end
       end
     else
-      {:noreply, assign(socket, highlight_index: new_idx)}
+      {:noreply, socket}
     end
   end
 
   def handle_event("kb_select", _params, socket) do
     list = visible_list(socket)
-    idx = socket.assigns.highlight_index
+
+    idx =
+      if socket.assigns.search_query != "" do
+        current_search_result_index(socket)
+      else
+        current_selection_index(socket)
+      end
 
     case Enum.at(list, idx || -1) do
       nil ->
@@ -264,7 +287,7 @@ defmodule ClaudePlans.Web.BrowserLive do
 
       item ->
         if socket.assigns.search_query != "" do
-          select_search_result(socket, item, idx || 0)
+          select_search_result(socket, item)
         else
           select_visible_item(socket, item)
         end
@@ -298,12 +321,8 @@ defmodule ClaudePlans.Web.BrowserLive do
           assign(socket,
             search_query: "",
             search_results: [],
-            highlight_index: nil,
             content_highlight: nil
           )
-
-        socket.assigns.highlight_index != nil ->
-          assign(socket, highlight_index: nil)
 
         true ->
           socket
@@ -315,7 +334,6 @@ defmodule ClaudePlans.Web.BrowserLive do
   def handle_event("kb_tab", %{"tab" => tab}, socket) do
     socket =
       assign(socket,
-        highlight_index: nil,
         search_query: "",
         search_results: [],
         content_highlight: nil
@@ -340,6 +358,34 @@ defmodule ClaudePlans.Web.BrowserLive do
     {:noreply, assign(socket, font_size: 16)}
   end
 
+
+  def handle_event("select_activity_event", %{"index" => idx_str}, socket) do
+    idx = String.to_integer(idx_str)
+
+    case Enum.at(socket.assigns.activity_events, idx) do
+      nil ->
+        {:noreply, socket}
+
+      %{category: :plan, filename: filename} ->
+        socket = assign(socket, content_highlight: nil)
+        handle_event("switch_tab", %{"tab" => "plans"}, socket)
+        |> then(fn {:noreply, socket} ->
+          handle_event("select_plan", %{"filename" => filename}, socket)
+        end)
+
+      %{category: cat, project: project, rel_path: rel_path} when cat in [:project_memory, :project_config] ->
+        socket =
+          socket
+          |> assign(content_highlight: nil)
+          |> load_project(project)
+          |> assign(active_tab: :projects)
+
+        handle_event("select_file", %{"path" => rel_path}, socket)
+
+      _ ->
+        {:noreply, socket}
+    end
+  end
 
   def handle_event("kb_delete", _params, socket) do
     case selected_file_path(socket) do
@@ -402,6 +448,9 @@ defmodule ClaudePlans.Web.BrowserLive do
             selected_file: selected_file,
             file_html: file_html
           )
+
+        _ ->
+          socket
       end
 
     {:noreply, socket}
@@ -432,7 +481,7 @@ defmodule ClaudePlans.Web.BrowserLive do
         end
       end
 
-    socket = assign(socket, plans: plans, selected: selected, html: html, highlight_index: nil)
+    socket = assign(socket, plans: plans, selected: selected, html: html)
 
     # Refresh versions for selected plan
     socket =
@@ -461,6 +510,19 @@ defmodule ClaudePlans.Web.BrowserLive do
     {:noreply, socket}
   end
 
+  def handle_info({:activity_event, event}, socket) do
+    events = [event | socket.assigns.activity_events] |> Enum.take(100)
+
+    unseen =
+      if socket.assigns.active_tab == :activity do
+        0
+      else
+        socket.assigns.unseen_activity_count + 1
+      end
+
+    {:noreply, assign(socket, activity_events: events, unseen_activity_count: unseen)}
+  end
+
   # --- Render ---
 
   @impl true
@@ -470,12 +532,15 @@ defmodule ClaudePlans.Web.BrowserLive do
       <div class="cb-sidebar">
         <div class="cb-tabs">
           <button
-            :for={{id, label} <- [{:plans, "Plans"}, {:projects, "Projects"}]}
+            :for={{id, label} <- [{:plans, "Plans"}, {:projects, "Projects"}, {:activity, "Activity"}]}
             phx-click="switch_tab"
             phx-value-tab={id}
             class={"cb-tab#{if @active_tab == id, do: " cb-tab--active", else: ""}"}
           >
             {label}
+            <span :if={id == :activity && @unseen_activity_count > 0} class="cb-badge">
+              {@unseen_activity_count}
+            </span>
           </button>
           <button phx-click="kb_help" class="cb-help-btn" title="Keyboard shortcuts"><.icon_help size={14} /></button>
           <button id="theme-toggle" class="cb-theme-toggle" phx-hook="ThemeToggle" phx-update="ignore"><.icon_moon size={14} /></button>
@@ -525,7 +590,7 @@ defmodule ClaudePlans.Web.BrowserLive do
             <dt><kbd>v</kbd></dt><dd>Toggle version history</dd>
             <dt><kbd>e</kbd></dt><dd>Open in editor (PLUG_EDITOR)</dd>
             <dt><kbd>x</kbd></dt><dd>Delete selected file</dd>
-            <dt><kbd>1</kbd> <kbd>2</kbd></dt><dd>Plans / Projects tab</dd>
+            <dt><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></dt><dd>Plans / Projects / Activity tab</dd>
             <dt><kbd>?</kbd></dt><dd>Toggle this help</dd>
           </dl>
         </div>
@@ -544,7 +609,7 @@ defmodule ClaudePlans.Web.BrowserLive do
       <button
         phx-click="select_search_result"
         phx-value-index={idx}
-        class={"cb-file-btn#{if @highlight_index == idx, do: " cb-file-btn--active cb-file-btn--highlighted", else: ""}"}
+        class={"cb-file-btn#{if search_result_active?(result, assigns), do: " cb-file-btn--active", else: ""}"}
       >
         <div class="cb-file-name">{result.display_name}</div>
         <div class="cb-search-source">{source_label(result)}</div>
@@ -563,11 +628,11 @@ defmodule ClaudePlans.Web.BrowserLive do
       <span class="cb-section-label">Plans</span>
       <span class="cb-count">{length(@plans)}</span>
     </div>
-    <div :for={{plan, idx} <- Enum.with_index(@plans)} class="cb-file-row">
+    <div :for={plan <- @plans} class="cb-file-row">
       <button
         phx-click="select_plan"
         phx-value-filename={plan.filename}
-        class={"cb-file-btn#{if @selected == plan.filename, do: " cb-file-btn--active", else: ""}#{if @highlight_index == idx and @search_query == "", do: " cb-file-btn--highlighted", else: ""}"}
+        class={"cb-file-btn#{if @selected == plan.filename, do: " cb-file-btn--active", else: ""}"}
       >
         <div class="cb-file-name">{plan.display_name}</div>
         <div class="cb-file-time">{format_time(plan.modified)}</div>
@@ -616,11 +681,11 @@ defmodule ClaudePlans.Web.BrowserLive do
         <span class="cb-section-label">Files</span>
         <span class="cb-count">{length(@project_files)}</span>
       </div>
-      <div :for={{file, idx} <- Enum.with_index(@project_files)} class="cb-file-row">
+      <div :for={file <- @project_files} class="cb-file-row">
         <button
           phx-click="select_file"
           phx-value-path={file.rel_path}
-          class={"cb-file-btn#{if @selected_file == file.rel_path, do: " cb-file-btn--active", else: ""}#{if @highlight_index == idx and @search_query == "", do: " cb-file-btn--highlighted", else: ""}"}
+          class={"cb-file-btn#{if @selected_file == file.rel_path, do: " cb-file-btn--active", else: ""}"}
         >
           <div class="cb-file-name">
             <span :if={file.dir} class="cb-file-dir">{file.dir}/</span>{file.name}
@@ -650,6 +715,49 @@ defmodule ClaudePlans.Web.BrowserLive do
         </div>
       </div>
       <div :if={@project_files == []} class="cb-empty">No .md files</div>
+    </div>
+    """
+  end
+
+  defp sidebar_content(%{active_tab: :activity} = assigns) do
+    ~H"""
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem">
+      <span class="cb-section-label">Activity</span>
+      <span class="cb-count">{length(@activity_events)}</span>
+    </div>
+    <div :for={{event, idx} <- Enum.with_index(@activity_events)}>
+      <button
+        phx-click="select_activity_event"
+        phx-value-index={idx}
+        class="cb-activity-row"
+      >
+        <span class={"cb-activity-icon cb-activity-icon--#{event.action}"}>
+          {action_icon(event.action)}
+        </span>
+        <div class="cb-activity-info">
+          <div class="cb-activity-name">{event.display_name}</div>
+          <div class="cb-activity-meta">
+            <span class="cb-activity-category">{category_label(event.category)}</span>
+            <span :if={event.project} class="cb-activity-project">{format_project_name(event.project)}</span>
+            <span class="cb-activity-time" id={"time-#{event.id}"} phx-hook="TimeAgo" data-timestamp={DateTime.to_iso8601(event.timestamp)}></span>
+          </div>
+        </div>
+      </button>
+    </div>
+    <div :if={@activity_events == []} class="cb-empty">
+      No activity yet.
+      <div class="cb-empty-hint">File changes will appear here in real-time</div>
+    </div>
+    """
+  end
+
+  defp main_content(%{active_tab: :activity} = assigns) do
+    ~H"""
+    <div class="cb-placeholder">
+      <div class="cb-placeholder-inner">
+        <div class="cb-placeholder-title">Activity Feed</div>
+        <div class="cb-placeholder-hint">Click an event to view the file</div>
+      </div>
     </div>
     """
   end
@@ -750,7 +858,7 @@ defmodule ClaudePlans.Web.BrowserLive do
       {:noreply, socket}
     else
       max_idx = length(results) - 1
-      current = socket.assigns.highlight_index || -1
+      current = current_search_result_index(socket) || -1
 
       new_idx =
         case direction do
@@ -760,8 +868,40 @@ defmodule ClaudePlans.Web.BrowserLive do
 
       case Enum.at(results, new_idx) do
         nil -> {:noreply, socket}
-        result -> select_search_result(socket, result, new_idx)
+        result -> select_search_result(socket, result)
       end
+    end
+  end
+
+  defp current_search_result_index(socket) do
+    Enum.find_index(socket.assigns.search_results, fn
+      %{source: :plan, filename: f} -> socket.assigns.selected == f
+      %{source: :project, project: p, rel_path: r} ->
+        socket.assigns.selected_project == p && socket.assigns.selected_file == r
+    end)
+  end
+
+  defp search_result_active?(result, assigns) do
+    case result do
+      %{source: :plan, filename: f} -> assigns.selected == f
+      %{source: :project, project: p, rel_path: r} ->
+        assigns.selected_project == p && assigns.selected_file == r
+    end
+  end
+
+  defp current_selection_index(socket) do
+    case socket.assigns.active_tab do
+      :plans ->
+        Enum.find_index(socket.assigns.plans, &(&1.filename == socket.assigns.selected))
+
+      :projects ->
+        Enum.find_index(
+          socket.assigns.project_files,
+          &(&1.rel_path == socket.assigns.selected_file)
+        )
+
+      _ ->
+        nil
     end
   end
 
@@ -770,6 +910,7 @@ defmodule ClaudePlans.Web.BrowserLive do
       socket.assigns.search_query != "" -> socket.assigns.search_results
       socket.assigns.active_tab == :plans -> socket.assigns.plans
       socket.assigns.active_tab == :projects -> socket.assigns.project_files
+      socket.assigns.active_tab == :activity -> socket.assigns.activity_events
       true -> []
     end
   end
@@ -782,12 +923,16 @@ defmodule ClaudePlans.Web.BrowserLive do
       :projects ->
         handle_event("select_file", %{"path" => item.rel_path}, socket)
 
+      :activity ->
+        idx = Enum.find_index(socket.assigns.activity_events, &(&1.id == item.id)) || 0
+        handle_event("select_activity_event", %{"index" => to_string(idx)}, socket)
+
       _ ->
         {:noreply, socket}
     end
   end
 
-  defp select_search_result(socket, %{source: :plan} = result, idx) do
+  defp select_search_result(socket, %{source: :plan} = result) do
     path = Path.join(ClaudePlans.plans_dir(), result.filename)
     highlight = socket.assigns.search_query
 
@@ -798,7 +943,6 @@ defmodule ClaudePlans.Web.BrowserLive do
            active_tab: :plans,
            selected: result.filename,
            html: RenderCache.render(content),
-           highlight_index: idx,
            content_highlight: highlight
          )}
 
@@ -807,7 +951,7 @@ defmodule ClaudePlans.Web.BrowserLive do
     end
   end
 
-  defp select_search_result(socket, %{source: :project, project: proj, rel_path: rel}, idx) do
+  defp select_search_result(socket, %{source: :project, project: proj, rel_path: rel}) do
     highlight = socket.assigns.search_query
 
     socket =
@@ -826,7 +970,6 @@ defmodule ClaudePlans.Web.BrowserLive do
            active_tab: :projects,
            selected_file: rel,
            file_html: RenderCache.render(content),
-           highlight_index: idx,
            content_highlight: highlight
          )}
 
@@ -962,6 +1105,27 @@ defmodule ClaudePlans.Web.BrowserLive do
             socket.assigns.selected_file
           ])
         end
+
+      _ ->
+        nil
+    end
+  end
+
+  defp action_icon(:created), do: "+"
+  defp action_icon(:updated), do: "~"
+  defp action_icon(:deleted), do: "-"
+
+  defp category_label(:plan), do: "plan"
+  defp category_label(:project_memory), do: "memory"
+  defp category_label(:project_config), do: "config"
+
+  defp format_project_name(dir_name) do
+    candidate = "/" <> (dir_name |> String.trim_leading("-") |> String.replace("-", "/"))
+
+    if File.dir?(candidate) do
+      Path.relative_to(candidate, System.user_home!()) |> then(&"~/#{&1}")
+    else
+      dir_name |> String.trim_leading("-Users-#{System.get_env("USER", "user")}-")
     end
   end
 
