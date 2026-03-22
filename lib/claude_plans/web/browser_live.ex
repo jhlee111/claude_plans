@@ -1,6 +1,8 @@
 defmodule ClaudePlans.Web.BrowserLive do
   use Phoenix.LiveView
 
+  import ClaudePlans.Web.Icons
+
   alias ClaudePlans.Watcher
   alias ClaudePlans.RenderCache
   alias ClaudePlans.SearchIndex
@@ -42,7 +44,8 @@ defmodule ClaudePlans.Web.BrowserLive do
        versions: [],
        diff_version_a: nil,
        diff_version_b: nil,
-       show_versions: false
+       show_versions: false,
+       font_size: 16
      )}
   end
 
@@ -325,6 +328,19 @@ defmodule ClaudePlans.Web.BrowserLive do
     {:noreply, assign(socket, show_help: !socket.assigns.show_help)}
   end
 
+  def handle_event("font_size", %{"dir" => "up"}, socket) do
+    {:noreply, assign(socket, font_size: min(socket.assigns.font_size + 2, 28))}
+  end
+
+  def handle_event("font_size", %{"dir" => "down"}, socket) do
+    {:noreply, assign(socket, font_size: max(socket.assigns.font_size - 2, 10))}
+  end
+
+  def handle_event("font_size", %{"dir" => "reset"}, socket) do
+    {:noreply, assign(socket, font_size: 16)}
+  end
+
+
   def handle_event("kb_delete", _params, socket) do
     case selected_file_path(socket) do
       nil -> {:noreply, socket}
@@ -461,8 +477,11 @@ defmodule ClaudePlans.Web.BrowserLive do
           >
             {label}
           </button>
-          <button phx-click="kb_help" class="cb-help-btn" title="Keyboard shortcuts">?</button>
-          <button id="theme-toggle" class="cb-theme-toggle" phx-hook="ThemeToggle" phx-update="ignore">&#9790;</button>
+          <button phx-click="kb_help" class="cb-help-btn" title="Keyboard shortcuts"><.icon_help size={14} /></button>
+          <button id="theme-toggle" class="cb-theme-toggle" phx-hook="ThemeToggle" phx-update="ignore"><.icon_moon size={14} /></button>
+          <button phx-click="font_size" phx-value-dir="down" class="cb-font-size-btn cb-font-size-btn--sm" title={"Smaller (current: #{@font_size}px)"}>A</button>
+          <span class="cb-font-size-sep">/</span>
+          <button phx-click="font_size" phx-value-dir="up" class="cb-font-size-btn cb-font-size-btn--lg" title={"Larger (current: #{@font_size}px)"}>A</button>
         </div>
         <div class="cb-sidebar-body">
           <div class="cb-search-wrap">
@@ -478,7 +497,7 @@ defmodule ClaudePlans.Web.BrowserLive do
                 class="cb-search-input"
               />
             </form>
-            <button :if={@search_query != ""} phx-click="clear_search" class="cb-search-clear" title="Clear search (Esc)">&times;</button>
+            <button :if={@search_query != ""} phx-click="clear_search" class="cb-search-clear" title="Clear search (Esc)"><.icon_x size={12} /></button>
           </div>
           <%= if @search_query != "" do %>
             {search_results_content(assigns)}
@@ -554,21 +573,21 @@ defmodule ClaudePlans.Web.BrowserLive do
         <div class="cb-file-time">{format_time(plan.modified)}</div>
       </button>
       <div class="cb-file-actions">
-        <a :if={editor_url(plan.path)} href={editor_url(plan.path)} class="cb-action-btn" title="Open in editor">Edit</a>
+        <a :if={editor_url(plan.path)} href={editor_url(plan.path)} class="cb-action-btn" title="Open in editor"><.icon_edit size={12} /></a>
         <span
           id={"copy-plan-#{plan.filename}"}
           class="cb-action-btn"
           phx-hook="CopyPath"
           data-path={plan.path}
           title={plan.path}
-        >Copy</span>
+        ><.icon_copy size={12} /></span>
         <button
           phx-click="delete_file"
           phx-value-path={plan.path}
           data-confirm={"Delete #{plan.path}?"}
           class="cb-action-btn cb-action-btn--danger"
           title="Delete file"
-        >&times;</button>
+        ><.icon_trash size={12} /></button>
       </div>
     </div>
     <div :if={@plans == []} class="cb-empty">
@@ -613,21 +632,21 @@ defmodule ClaudePlans.Web.BrowserLive do
             href={editor_url(Path.join([@projects_dir, @selected_project, file.rel_path]))}
             class="cb-action-btn"
             title="Open in editor"
-          >Edit</a>
+          ><.icon_edit size={12} /></a>
           <span
             id={"copy-file-#{file.rel_path}"}
             class="cb-action-btn"
             phx-hook="CopyPath"
             data-path={Path.join([@projects_dir, @selected_project, file.rel_path])}
             title={Path.join([@projects_dir, @selected_project, file.rel_path])}
-          >Copy</span>
+          ><.icon_copy size={12} /></span>
           <button
             phx-click="delete_file"
             phx-value-path={Path.join([@projects_dir, @selected_project, file.rel_path])}
             data-confirm={"Delete #{Path.join([@projects_dir, @selected_project, file.rel_path])}?"}
             class="cb-action-btn cb-action-btn--danger"
             title="Delete file"
-          >&times;</button>
+          ><.icon_trash size={12} /></button>
         </div>
       </div>
       <div :if={@project_files == []} class="cb-empty">No .md files</div>
@@ -692,7 +711,7 @@ defmodule ClaudePlans.Web.BrowserLive do
       <div :if={@view_mode == :diff && @diff_html} class="cb-diff-view">
         {Phoenix.HTML.raw(@diff_html)}
       </div>
-      <div :if={@view_mode == :rendered} id="plan-content" class="cp-content" phx-hook="Mermaid" phx-update="replace" data-highlight={@content_highlight}>
+      <div :if={@view_mode == :rendered} id="plan-content" class="cp-content" phx-hook="Mermaid" phx-update="replace" data-highlight={@content_highlight} style={"font-size: #{@font_size}px"}>
         {Phoenix.HTML.raw(@html)}
       </div>
     </div>
@@ -709,7 +728,7 @@ defmodule ClaudePlans.Web.BrowserLive do
     ~H"""
     <div :if={@file_html} class="cb-content-wrap">
       <div class="cb-file-header">{@selected_file}</div>
-      <div id="project-file-content" class="cp-content" phx-hook="Mermaid" phx-update="replace" data-highlight={@content_highlight}>
+      <div id="project-file-content" class="cp-content" phx-hook="Mermaid" phx-update="replace" data-highlight={@content_highlight} style={"font-size: #{@font_size}px"}>
         {Phoenix.HTML.raw(@file_html)}
       </div>
     </div>
@@ -904,7 +923,16 @@ defmodule ClaudePlans.Web.BrowserLive do
   end
 
   defp format_time(posix_time) when is_integer(posix_time) do
-    posix_time |> DateTime.from_unix!() |> Calendar.strftime("%b %d, %H:%M")
+    now = System.os_time(:second)
+    diff = now - posix_time
+
+    cond do
+      diff < 60 -> "just now"
+      diff < 3600 -> "#{div(diff, 60)} min ago"
+      diff < 86400 -> "#{div(diff, 3600)}h ago"
+      diff < 86400 * 30 -> "#{div(diff, 86400)}d ago"
+      true -> posix_time |> DateTime.from_unix!() |> Calendar.strftime("%b %d, %Y")
+    end
   end
 
   defp format_version_time(%DateTime{} = dt) do

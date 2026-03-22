@@ -61,14 +61,14 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .cp-content h1, .cp-content h2, .cp-content h3, .cp-content h4, .cp-content h5, .cp-content h6 {
   position: relative; font-weight: 600; outline: none;
 }
-.cp-content h1 { letter-spacing: -0.02em; line-height: 40px; font-size: 28px; }
-.cp-content h2 { margin: 48px 0 16px; border-top: 1px solid #e2e8f0; padding-top: 24px; letter-spacing: -0.02em; line-height: 32px; font-size: 24px; }
-.cp-content h3 { margin: 32px 0 0; letter-spacing: -0.01em; line-height: 28px; font-size: 20px; }
-.cp-content h4 { margin: 24px 0 0; line-height: 24px; font-size: 18px; }
+.cp-content h1 { letter-spacing: -0.02em; line-height: 1.4; font-size: 1.75em; }
+.cp-content h2 { margin: 48px 0 16px; border-top: 1px solid #e2e8f0; padding-top: 24px; letter-spacing: -0.02em; line-height: 1.35; font-size: 1.5em; }
+.cp-content h3 { margin: 32px 0 0; letter-spacing: -0.01em; line-height: 1.3; font-size: 1.25em; }
+.cp-content h4 { margin: 24px 0 0; line-height: 1.3; font-size: 1.125em; }
 .cp-content > h2:first-child { margin-top: 0; border-top: none; padding-top: 0; }
 
 .cp-content p, .cp-content summary { margin: 16px 0; }
-.cp-content p { line-height: 28px; }
+.cp-content p { line-height: 1.75; }
 
 .cp-content a { font-weight: 500; color: #6366f1; text-decoration: underline; text-underline-offset: 2px; }
 .cp-content a:hover { color: #4f46e5; }
@@ -89,14 +89,14 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .cp-content pre code { display: block; padding: 20px 24px; width: fit-content; min-width: 100%; line-height: 1.7; font-size: 0.875em; color: #3c3c43; background: none; }
 
 .cp-content blockquote { margin: 16px 0; border-left: 2px solid #e2e8f0; padding-left: 16px; }
-.cp-content blockquote > p { margin: 0; font-size: 16px; color: #67676c; }
+.cp-content blockquote > p { margin: 0; font-size: 1em; color: #67676c; }
 
 .cp-content table { display: block; border-collapse: collapse; margin: 20px 0; overflow-x: auto; }
 .cp-content tr { background-color: #fff; border-top: 1px solid #e2e8f0; }
 .cp-content tr:nth-child(2n) { background-color: #f6f6f7; }
 .cp-content th, .cp-content td { border: 1px solid #e2e8f0; padding: 8px 16px; }
-.cp-content th { text-align: left; font-size: 14px; font-weight: 600; color: #67676c; background-color: #f6f6f7; }
-.cp-content td { font-size: 14px; }
+.cp-content th { text-align: left; font-size: 0.875em; font-weight: 600; color: #67676c; background-color: #f6f6f7; }
+.cp-content td { font-size: 0.875em; }
 
 .cp-content hr { margin: 16px 0; border: none; border-top: 1px solid #e2e8f0; }
 .cp-content img { max-width: 100%; border-radius: 8px; margin: 16px 0; }
@@ -259,7 +259,14 @@ kbd { display: inline-block; padding: 2px 6px; font-size: 0.6875rem; font-family
 
 /* Content header with actions */
 .cb-content-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
-.cb-header-actions { display: flex; gap: 0.5rem; }
+.cb-header-actions { display: flex; gap: 0.5rem; align-items: center; }
+.cb-font-size-btn { flex-shrink: 0; border: none; background: none; cursor: pointer; color: #94a3b8; font-weight: 700; padding: 0 2px; border-radius: 4px; transition: color 0.15s, background 0.15s; line-height: 1; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+.cb-font-size-btn--sm { font-size: 0.5625rem; }
+.cb-font-size-btn--lg { font-size: 0.875rem; }
+.cb-font-size-sep { color: #cbd5e1; font-size: 0.625rem; font-weight: 300; user-select: none; }
+[data-theme="dark"] .cb-font-size-sep { color: #475569; }
+.cb-font-size-btn:hover { color: #4338ca; background: rgba(99, 102, 241, 0.08); }
+[data-theme="dark"] .cb-font-size-btn:hover { color: #818cf8; background: rgba(129, 140, 248, 0.1); }
 .cb-action-btn { font-size: 0.6875rem; padding: 0.25rem 0.625rem; border: 1px solid #e2e8f0; border-radius: 0.375rem; background: #f8fafc; color: #64748b; cursor: pointer; transition: all 0.15s; }
 .cb-action-btn:hover { background: #eef2ff; color: #4338ca; border-color: #c7d2fe; }
 .cb-action-btn--active { background: #eef2ff; color: #4338ca; border-color: #6366f1; }

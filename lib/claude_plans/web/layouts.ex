@@ -29,14 +29,16 @@ defmodule ClaudePlans.Web.Layouts do
     document.documentElement.setAttribute('data-theme', t);
     localStorage.setItem('claude-plans-theme', t);
     if (typeof mermaid !== 'undefined') mermaid.initialize(t === 'dark' ? DARK_MERMAID : LIGHT_MERMAID);
-    document.querySelectorAll('.cb-theme-toggle').forEach(b => b.textContent = t === 'dark' ? '\u2600' : '\u263E');
+    const moonSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>';
+    const sunSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>';
+    document.querySelectorAll('.cb-theme-toggle').forEach(b => b.innerHTML = t === 'dark' ? sunSvg : moonSvg);
   }
   applyTheme(getTheme());
 
   let Hooks = {};
   Hooks.ThemeToggle = {
     mounted() {
-      this.el.textContent = getTheme() === 'dark' ? '\u2600' : '\u263E';
+      applyTheme(getTheme());
       this.el.addEventListener("click", (e) => {
         e.preventDefault();
         const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
@@ -170,6 +172,7 @@ defmodule ClaudePlans.Web.Layouts do
     mounted() {
       this._pendingG = false;
       this.handleKeyDown = (e) => {
+        if (!document.hasFocus()) return;
         const tag = document.activeElement?.tagName;
         if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
           if (e.key === 'Escape') {
