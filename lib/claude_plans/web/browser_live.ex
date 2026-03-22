@@ -358,7 +358,6 @@ defmodule ClaudePlans.Web.BrowserLive do
     {:noreply, assign(socket, font_size: 16)}
   end
 
-
   def handle_event("select_activity_event", %{"index" => idx_str}, socket) do
     idx = String.to_integer(idx_str)
 
@@ -368,12 +367,14 @@ defmodule ClaudePlans.Web.BrowserLive do
 
       %{category: :plan, filename: filename} ->
         socket = assign(socket, content_highlight: nil)
+
         handle_event("switch_tab", %{"tab" => "plans"}, socket)
         |> then(fn {:noreply, socket} ->
           handle_event("select_plan", %{"filename" => filename}, socket)
         end)
 
-      %{category: cat, project: project, rel_path: rel_path} when cat in [:project_memory, :project_config] ->
+      %{category: cat, project: project, rel_path: rel_path}
+      when cat in [:project_memory, :project_config] ->
         socket =
           socket
           |> assign(content_highlight: nil)
@@ -875,7 +876,9 @@ defmodule ClaudePlans.Web.BrowserLive do
 
   defp current_search_result_index(socket) do
     Enum.find_index(socket.assigns.search_results, fn
-      %{source: :plan, filename: f} -> socket.assigns.selected == f
+      %{source: :plan, filename: f} ->
+        socket.assigns.selected == f
+
       %{source: :project, project: p, rel_path: r} ->
         socket.assigns.selected_project == p && socket.assigns.selected_file == r
     end)
@@ -883,7 +886,9 @@ defmodule ClaudePlans.Web.BrowserLive do
 
   defp search_result_active?(result, assigns) do
     case result do
-      %{source: :plan, filename: f} -> assigns.selected == f
+      %{source: :plan, filename: f} ->
+        assigns.selected == f
+
       %{source: :project, project: p, rel_path: r} ->
         assigns.selected_project == p && assigns.selected_file == r
     end

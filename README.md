@@ -13,6 +13,7 @@ Browse `~/.claude/plans/` and `~/.claude/projects/*/memory/` in a clean, searcha
 - **Plans tab** — Browse and read Claude Code plan files with live updates
 - **Version history** — Automatic snapshots on each file change with persistent history
 - **Diff view** — Side-by-side line-level diff between any two plan versions with hunk collapsing
+- **Activity feed** — Real-time feed of file changes (creates, updates, deletes) across plans and project memory with direct navigation
 - **Projects tab** — Browse project memory files across all Claude Code projects
 - **Dark / Light mode** — Auto-detects OS preference, toggle with one click, persisted in localStorage
 - **Server-side Markdown** — Rendered via MDEx with GitHub-style syntax highlighting
@@ -20,7 +21,7 @@ Browse `~/.claude/plans/` and `~/.claude/projects/*/memory/` in a clean, searcha
 - **Full-text search** — Search across all plan and project files with instant results and in-document match highlighting
 - **Open in editor** — Click "Edit" or press `e` to open the selected file in your editor via `PLUG_EDITOR`
 - **Delete files** — Remove plan or project files with `x` or the delete button (with confirmation)
-- **Keyboard navigation** — Vim-style keys: j/k to navigate, / to search, n/N to jump between matches, d to toggle diff, v to toggle version history, e to edit, x to delete, ? for help overlay
+- **Keyboard navigation** — Vim-style keys: j/k to navigate, / to search, n/N to jump between matches, d to toggle diff, v to toggle version history, e to edit, x to delete, 1/2/3 to switch tabs, ? for help overlay
 - **Live file watching** — Plans auto-reload when files change on disk
 - **Copy path** — Hover any file to copy its absolute path to clipboard
 - **Self-contained** — No Tailwind, no Node.js, no asset pipeline. CSS and JS embedded at compile time
@@ -41,7 +42,7 @@ claude-plans
 
 ```bash
 # macOS Apple Silicon
-curl -L -o claude-plans https://github.com/jhlee111/claude_plans/releases/download/v0.4.0/claude_plans_macos_arm
+curl -L -o claude-plans https://github.com/jhlee111/claude_plans/releases/download/v0.6.0/claude_plans_macos_arm
 chmod +x claude-plans
 ./claude-plans
 ```

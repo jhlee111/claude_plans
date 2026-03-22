@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-03-22
+
+### Added
+- Real-time activity feed (Activity tab) tracking file creates, updates, and deletes across plans and project memory
+- Activity events link directly to the relevant file — click an event to navigate to the plan or project file
+- Unseen activity badge on the Activity tab when changes happen in the background
+- Keyboard shortcut `3` to switch to Activity tab
+
+### Changed
+- Unified selection state: removed `highlight_index` in favor of a single `selected`/`selected_file` source of truth, fixing dual-highlight bugs when navigating between tabs
+- Keyboard navigation (J/K) now blurs previously focused elements to prevent stale browser focus outlines
+
+### Removed
+- `cb-file-btn--highlighted` CSS class (replaced by unified `--active` styling)
+
 ## [0.5.0] - 2026-03-22
 
 ### Added
