@@ -2,6 +2,19 @@ defmodule ClaudePlans.ActivityFeed do
   @moduledoc "Watches ~/.claude/ for file changes and maintains a live activity feed."
   use GenServer
   require Logger
+  alias ClaudePlans.Debounce
+
+  @type event :: %{
+          id: String.t(),
+          path: String.t(),
+          action: :created | :updated | :deleted,
+          category: :plan | :project_memory | :project_config,
+          display_name: String.t(),
+          project: String.t() | nil,
+          rel_path: String.t(),
+          filename: String.t(),
+          timestamp: DateTime.t()
+        }
 
   @debounce_ms 300
   @max_events 100
@@ -15,12 +28,14 @@ defmodule ClaudePlans.ActivityFeed do
   end
 
   @doc "Subscribe the calling process to activity feed updates."
+  @spec subscribe() :: :ok
   def subscribe do
     {:ok, _} = Registry.register(ClaudePlans.Registry, :activity_updates, [])
     :ok
   end
 
   @doc "Returns the current list of events (newest first)."
+  @spec list_events() :: [event()]
   def list_events do
     GenServer.call(__MODULE__, :list_events)
   end
@@ -65,8 +80,9 @@ defmodule ClaudePlans.ActivityFeed do
     end
   end
 
+  @impl true
   def handle_info({:debounced_event, path}, state) do
-    state = %{state | debounce_timers: Map.delete(state.debounce_timers, path)}
+    state = %{state | debounce_timers: Debounce.clear(state.debounce_timers, path)}
 
     action = determine_action(path, state.known_files)
 
@@ -79,6 +95,7 @@ defmodule ClaudePlans.ActivityFeed do
     end
   end
 
+  @impl true
   def handle_info(:gc_expired, state) do
     cutoff = DateTime.add(DateTime.utc_now(), -@ttl_ms, :millisecond)
     events = Enum.filter(state.events, &(DateTime.compare(&1.timestamp, cutoff) == :gt))
@@ -86,6 +103,7 @@ defmodule ClaudePlans.ActivityFeed do
     {:noreply, %{state | events: events}}
   end
 
+  @impl true
   def handle_info({:file_event, _pid, :stop}, state) do
     Logger.warning("[ActivityFeed] File watcher stopped")
     {:noreply, state}
@@ -122,16 +140,8 @@ defmodule ClaudePlans.ActivityFeed do
   # --- Internal helpers ---
 
   defp debounce_path(state, path) do
-    cancel_existing_timer(state.debounce_timers, path)
-    ref = Process.send_after(self(), {:debounced_event, path}, @debounce_ms)
-    %{state | debounce_timers: Map.put(state.debounce_timers, path, ref)}
-  end
-
-  defp cancel_existing_timer(timers, path) do
-    case Map.get(timers, path) do
-      nil -> :ok
-      ref -> Process.cancel_timer(ref)
-    end
+    timers = Debounce.debounce(state.debounce_timers, path, {:debounced_event, path}, @debounce_ms)
+    %{state | debounce_timers: timers}
   end
 
   defp scan_known_files(plans_dir, projects_dir) do

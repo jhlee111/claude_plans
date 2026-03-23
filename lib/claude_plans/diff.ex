@@ -4,12 +4,16 @@ defmodule ClaudePlans.Diff do
   @context_lines 3
   @collapse_threshold 6
 
+  @type diff_op :: {:eq | :ins | :del, [String.t()]}
+
   @doc "Compute myers diff between two strings, returns list of {:eq|:ins|:del, [lines]}."
+  @spec compute(String.t(), String.t()) :: [diff_op()]
   def compute(old, new) when is_binary(old) and is_binary(new) do
     List.myers_difference(String.split(old, "\n"), String.split(new, "\n"))
   end
 
   @doc "Convert diff ops to an HTML string with line numbers and hunk collapsing."
+  @spec to_html([diff_op()]) :: String.t()
   def to_html(diff_ops) do
     diff_ops
     |> flatten_lines()
@@ -96,10 +100,6 @@ defmodule ClaudePlans.Diff do
   end
 
   defp escape_html(text) do
-    text
-    |> String.replace("&", "&amp;")
-    |> String.replace("<", "&lt;")
-    |> String.replace(">", "&gt;")
-    |> String.replace("\"", "&quot;")
+    text |> Phoenix.HTML.html_escape() |> Phoenix.HTML.safe_to_string()
   end
 end

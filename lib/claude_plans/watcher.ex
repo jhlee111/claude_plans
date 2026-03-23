@@ -9,13 +9,22 @@ defmodule ClaudePlans.Watcher do
     GenServer.start_link(__MODULE__, [], name: __MODULE__)
   end
 
+  @type plan_entry :: %{
+          filename: String.t(),
+          display_name: String.t(),
+          modified: integer(),
+          path: String.t()
+        }
+
   @doc "Subscribe the calling process to plan file change notifications."
+  @spec subscribe() :: :ok
   def subscribe do
     {:ok, _} = Registry.register(ClaudePlans.Registry, :plan_updates, [])
     :ok
   end
 
   @doc "Lists all .md plan files sorted by modified time (newest first)."
+  @spec list_plans() :: [plan_entry()]
   def list_plans do
     dir = ClaudePlans.plans_dir()
     if is_nil(dir), do: [], else: do_list_plans(dir)
@@ -64,26 +73,19 @@ defmodule ClaudePlans.Watcher do
     {:ok, %{watcher_pid: watcher_pid, debounce_timers: %{}}}
   end
 
+  alias ClaudePlans.Debounce
+
   @impl true
   def handle_info({:file_event, _pid, {path, _events}}, state) do
     if String.ends_with?(path, ".md") do
-      state =
-        case Map.get(state.debounce_timers, path) do
-          nil ->
-            state
-
-          ref ->
-            Process.cancel_timer(ref)
-            state
-        end
-
-      ref = Process.send_after(self(), {:debounced_notify, path}, @debounce_ms)
-      {:noreply, %{state | debounce_timers: Map.put(state.debounce_timers, path, ref)}}
+      timers = Debounce.debounce(state.debounce_timers, path, {:debounced_notify, path}, @debounce_ms)
+      {:noreply, %{state | debounce_timers: timers}}
     else
       {:noreply, state}
     end
   end
 
+  @impl true
   def handle_info({:debounced_notify, path}, state) do
     filename = Path.basename(path)
 
@@ -91,7 +93,7 @@ defmodule ClaudePlans.Watcher do
       for {pid, _} <- entries, do: send(pid, {:plan_updated, filename})
     end)
 
-    {:noreply, %{state | debounce_timers: Map.delete(state.debounce_timers, path)}}
+    {:noreply, %{state | debounce_timers: Debounce.clear(state.debounce_timers, path)}}
   end
 
   def handle_info({:file_event, _pid, :stop}, state) do

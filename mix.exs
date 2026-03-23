@@ -10,7 +10,6 @@ defmodule ClaudePlans.MixProject do
       elixir: "~> 1.17",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
-      listeners: [Phoenix.CodeReloader],
       releases: releases(),
       name: "ClaudePlans",
       description: "Standalone viewer for Claude Code plans and project memory",
@@ -43,7 +42,8 @@ defmodule ClaudePlans.MixProject do
       {:phoenix_live_reload, "~> 1.2", only: :dev},
       {:burrito, "~> 1.5", only: :prod},
       {:ex_doc, "~> 0.35", only: :dev, runtime: false},
-      {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:lazy_html, ">= 0.1.0", only: :test}
     ]
   end
 

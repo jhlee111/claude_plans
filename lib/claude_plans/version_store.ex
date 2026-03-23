@@ -3,6 +3,21 @@ defmodule ClaudePlans.VersionStore do
   use GenServer
   require Logger
 
+  @type version_meta :: %{
+          id: String.t(),
+          hash: binary(),
+          timestamp: DateTime.t(),
+          byte_size: non_neg_integer()
+        }
+
+  @type version_entry :: %{
+          id: String.t(),
+          content: String.t(),
+          hash: binary(),
+          timestamp: DateTime.t(),
+          byte_size: non_neg_integer()
+        }
+
   @max_versions 50
 
   def start_link(_opts) do
@@ -10,38 +25,86 @@ defmodule ClaudePlans.VersionStore do
   end
 
   @doc "List versions for a plan (no content — keeps messages small)."
+  @spec list_versions(String.t()) :: [version_meta()]
   def list_versions(filename) do
     GenServer.call(__MODULE__, {:list_versions, filename})
   end
 
   @doc "Get a full version entry including content."
+  @spec get_version(String.t(), String.t()) :: version_entry() | nil
   def get_version(filename, id) do
     GenServer.call(__MODULE__, {:get_version, filename, id})
   end
 
   @doc "Compute diff HTML between two versions of a plan."
+  @spec diff(String.t(), String.t(), String.t()) :: String.t() | nil
   def diff(filename, id_a, id_b) do
     GenServer.call(__MODULE__, {:diff, filename, id_a, id_b})
   end
 
   @doc "Force-capture a snapshot of the current file."
+  @spec snapshot(String.t()) :: :ok
   def snapshot(filename) do
     GenServer.cast(__MODULE__, {:snapshot, filename})
   end
 
   @doc "Get the last-checked version id for a file, or nil."
+  @spec get_checked_version(String.t()) :: String.t() | nil
   def get_checked_version(filename) do
     GenServer.call(__MODULE__, {:get_checked_version, filename})
   end
 
   @doc "Mark a file as checked at its latest version."
+  @spec mark_checked(String.t()) :: :ok
   def mark_checked(filename) do
     GenServer.cast(__MODULE__, {:mark_checked, filename})
   end
 
   @doc "Returns a MapSet of filenames with unchecked changes."
+  @spec unchecked_files() :: MapSet.t(String.t())
   def unchecked_files do
     GenServer.call(__MODULE__, :unchecked_files)
+  end
+
+  @doc """
+  Snapshot the file, compute diff from the checked version (or previous version),
+  and return `{diff_html, versions, checked_id}` in a single call.
+
+  This avoids multiple sequential GenServer round-trips from LiveView event handlers.
+  """
+  @spec diff_since_checked(String.t()) :: {String.t() | nil, [version_meta()], String.t() | nil}
+  def diff_since_checked(filename) do
+    GenServer.call(__MODULE__, {:diff_since_checked, filename})
+  end
+
+  @doc """
+  Given a checked version ID and version list, determine whether to show
+  rendered or diff view, and compute the diff HTML if needed.
+
+  Returns `{view_mode, diff_html, diff_version_a, diff_version_b}`.
+  """
+  @spec resolve_diff_state(String.t(), String.t() | nil, [version_meta()]) ::
+          {:rendered | :diff, String.t() | nil, String.t() | nil, String.t() | nil}
+  def resolve_diff_state(_filename, nil, _versions), do: {:rendered, nil, nil, nil}
+
+  def resolve_diff_state(_filename, cid, [latest | _]) when cid == latest.id,
+    do: {:rendered, nil, nil, nil}
+
+  def resolve_diff_state(filename, cid, [latest | _] = vers) when length(vers) >= 2 do
+    {diff_from, diff_to} = pick_diff_versions(cid, latest, vers)
+    html = diff(filename, diff_from, diff_to)
+    {:diff, html, diff_from, diff_to}
+  end
+
+  def resolve_diff_state(_filename, _checked_id, _versions), do: {:rendered, nil, nil, nil}
+
+  defp pick_diff_versions(cid, latest, vers) do
+    if Enum.any?(vers, &(&1.id == cid)) do
+      {cid, latest.id}
+    else
+      [^latest, previous | _] = vers
+      {previous.id, latest.id}
+    end
   end
 
   # --- Server ---
@@ -100,6 +163,39 @@ defmodule ClaudePlans.VersionStore do
     {:reply, Map.get(state.checked_versions, filename), state}
   end
 
+  def handle_call({:diff_since_checked, filename}, _from, state) do
+    # Snapshot first (in-process, no extra GenServer call)
+    state = do_snapshot(state, filename)
+    versions = Map.get(state.versions, filename, [])
+    checked_id = Map.get(state.checked_versions, filename)
+
+    versions_meta = Enum.map(versions, &Map.drop(&1, [:content]))
+
+    diff_html =
+      case {checked_id, versions} do
+        {nil, [_latest, previous | _]} ->
+          [latest | _] = versions
+          do_diff(versions, previous.id, latest.id)
+
+        {cid, [latest | _]} when cid == latest.id and length(versions) >= 2 ->
+          [_, previous | _] = versions
+          do_diff(versions, previous.id, latest.id)
+
+        {cid, [latest | _]} when length(versions) >= 2 ->
+          if Enum.any?(versions, &(&1.id == cid)) do
+            do_diff(versions, cid, latest.id)
+          else
+            [_, previous | _] = versions
+            do_diff(versions, previous.id, latest.id)
+          end
+
+        _ ->
+          nil
+      end
+
+    {:reply, {diff_html, versions_meta, checked_id}, state}
+  end
+
   def handle_call(:unchecked_files, _from, state) do
     unchecked =
       state.versions
@@ -138,11 +234,22 @@ defmodule ClaudePlans.VersionStore do
     {:noreply, do_snapshot(state, filename)}
   end
 
+  @impl true
   def handle_info({:snapshot_initial, filename}, state) do
     {:noreply, do_snapshot(state, filename)}
   end
 
   # --- Internal ---
+
+  defp do_diff(versions, id_a, id_b) do
+    va = Enum.find(versions, &(&1.id == id_a))
+    vb = Enum.find(versions, &(&1.id == id_b))
+
+    if va && vb do
+      ClaudePlans.Diff.compute(va.content, vb.content)
+      |> ClaudePlans.Diff.to_html()
+    end
+  end
 
   defp do_snapshot(state, filename) do
     path = Path.join(ClaudePlans.plans_dir(), filename)
@@ -202,7 +309,7 @@ defmodule ClaudePlans.VersionStore do
 
     File.write!(history_path(filename), Jason.encode!(data))
   rescue
-    e ->
+    e in [File.Error, Jason.EncodeError] ->
       Logger.warning("[VersionStore] Failed to persist history for #{filename}: #{inspect(e)}")
   end
 
@@ -270,7 +377,7 @@ defmodule ClaudePlans.VersionStore do
     File.mkdir_p!(dir)
     File.write!(checked_versions_path(), Jason.encode!(checked))
   rescue
-    e ->
+    e in [File.Error, Jason.EncodeError] ->
       Logger.warning("[VersionStore] Failed to persist checked versions: #{inspect(e)}")
   end
 

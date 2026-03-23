@@ -8,7 +8,8 @@ config :claude_plans, ClaudePlans.Endpoint,
   live_reload: [
     patterns: [
       ~r"lib/claude_plans/web/.*(ex)$",
-      ~r"lib/claude_plans/web/css/.*(css)$"
+      ~r"lib/claude_plans/web/css/.*(css)$",
+      ~r"lib/claude_plans/web/js/.*(js)$"
     ]
   ]
 

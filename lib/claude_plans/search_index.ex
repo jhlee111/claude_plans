@@ -10,11 +10,23 @@ defmodule ClaudePlans.SearchIndex do
     GenServer.start_link(__MODULE__, [], name: __MODULE__)
   end
 
+  @type search_result :: %{
+          source: :plan | :project,
+          project: String.t() | nil,
+          filename: String.t(),
+          display_name: String.t(),
+          rel_path: String.t(),
+          path: String.t(),
+          matches: [%{line_number: pos_integer(), line_text: String.t()}]
+        }
+
   @doc "Search all indexed files for a case-insensitive substring match."
+  @spec search(String.t()) :: [search_result()]
   def search(query) when is_binary(query) and byte_size(query) > 0 do
     GenServer.call(__MODULE__, {:search, query})
   end
 
+  @spec search(any()) :: []
   def search(_), do: []
 
   # --- Server ---
@@ -24,7 +36,7 @@ defmodule ClaudePlans.SearchIndex do
     {:ok, _} = Registry.register(ClaudePlans.Registry, :plan_updates, [])
     Process.send_after(self(), :rebuild, 0)
     schedule_refresh()
-    {:ok, %{entries: []}}
+    {:ok, %{entries: %{}}}
   end
 
   @impl true
@@ -33,6 +45,7 @@ defmodule ClaudePlans.SearchIndex do
 
     results =
       state.entries
+      |> Map.values()
       |> Enum.reduce([], fn entry, acc ->
         matches =
           entry.content
@@ -63,8 +76,8 @@ defmodule ClaudePlans.SearchIndex do
     {:noreply, %{entries: build_index()}}
   end
 
-  def handle_info({:plan_updated, _filename}, _state) do
-    {:noreply, %{entries: build_index()}}
+  def handle_info({:plan_updated, filename}, state) do
+    {:noreply, %{state | entries: update_plan_entry(state.entries, filename)}}
   end
 
   def handle_info(:refresh, state) do
@@ -75,7 +88,40 @@ defmodule ClaudePlans.SearchIndex do
   # --- Index Building ---
 
   defp build_index do
-    plan_entries() ++ project_entries()
+    entries = plan_entries() ++ project_entries()
+    Map.new(entries, fn entry -> {entry.path, entry} end)
+  end
+
+  defp update_plan_entry(entries, filename) do
+    dir = ClaudePlans.plans_dir()
+    path = if dir, do: Path.join(dir, filename), else: nil
+
+    cond do
+      is_nil(path) ->
+        entries
+
+      File.regular?(path) ->
+        case File.read(path) do
+          {:ok, content} ->
+            entry = %{
+              source: :plan,
+              project: nil,
+              filename: filename,
+              display_name: String.replace_trailing(filename, ".md", ""),
+              rel_path: filename,
+              path: path,
+              content: content
+            }
+
+            Map.put(entries, path, entry)
+
+          {:error, _} ->
+            Map.delete(entries, path)
+        end
+
+      true ->
+        Map.delete(entries, path)
+    end
   end
 
   defp plan_entries do

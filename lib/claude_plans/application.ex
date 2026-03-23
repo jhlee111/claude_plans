@@ -34,6 +34,9 @@ defmodule ClaudePlans.Application do
       _ -> :ok
     end
   rescue
-    _ -> :ok
+    e in [ErlangError, File.Error] ->
+      require Logger
+      Logger.warning("[ClaudePlans] Failed to open browser: #{inspect(e)}")
+      :ok
   end
 end

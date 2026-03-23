@@ -15,6 +15,7 @@ defmodule ClaudePlans.RenderCache do
   end
 
   @doc "Get rendered HTML for markdown content, using cache when available."
+  @spec render(String.t() | nil) :: String.t()
   def render(content) when is_binary(content) do
     hash = content_hash(content)
 
@@ -32,6 +33,7 @@ defmodule ClaudePlans.RenderCache do
   def render(nil), do: ""
 
   @doc "Pre-render a list of file paths in parallel in the background."
+  @spec prerender([String.t()]) :: :ok
   def prerender(paths) when is_list(paths) and paths != [] do
     GenServer.cast(__MODULE__, {:prerender, paths})
   end
@@ -42,6 +44,7 @@ defmodule ClaudePlans.RenderCache do
   Pre-render files near the given index in a list of file paths.
   Uses a sliding window to render files the user is likely to view next.
   """
+  @spec prerender_nearby([String.t()], non_neg_integer(), non_neg_integer()) :: :ok | nil
   def prerender_nearby(all_paths, current_index, window \\ 5) do
     len = length(all_paths)
     start_idx = max(0, current_index - window)
@@ -54,12 +57,14 @@ defmodule ClaudePlans.RenderCache do
   end
 
   @doc "Check if content is already cached."
+  @spec cached?(String.t()) :: boolean()
   def cached?(content) when is_binary(content) do
     hash = content_hash(content)
     :ets.lookup(@table, hash) != []
   end
 
   @doc "Number of cached entries."
+  @spec size() :: non_neg_integer()
   def size, do: :ets.info(@table, :size)
 
   # --- GenServer callbacks ---
@@ -134,6 +139,6 @@ defmodule ClaudePlans.RenderCache do
   end
 
   defp content_hash(content) do
-    :erlang.md5(content)
+    :crypto.hash(:sha256, content)
   end
 end

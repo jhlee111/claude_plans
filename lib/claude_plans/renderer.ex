@@ -1,6 +1,7 @@
 defmodule ClaudePlans.Renderer do
   @moduledoc false
 
+  @spec to_html(String.t() | nil) :: String.t()
   def to_html(markdown) when is_binary(markdown) do
     MDEx.to_html!(markdown,
       extension: [
