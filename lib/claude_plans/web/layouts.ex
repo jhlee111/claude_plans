@@ -17,9 +17,6 @@ defmodule ClaudePlans.Web.Layouts do
   @phoenix_js for(path <- phoenix_js_paths, do: File.read!(path)) |> Enum.join("\n")
 
   @app_js ~S"""
-  const LIGHT_MERMAID = { theme: 'base', startOnLoad: false, themeVariables: { darkMode: false, background: '#ffffff', primaryColor: '#eef2ff', primaryTextColor: '#1e293b', primaryBorderColor: '#94a3b8', lineColor: '#64748b', secondaryColor: '#f1f5f9', tertiaryColor: '#f8fafc' } };
-  const DARK_MERMAID = { theme: 'base', startOnLoad: false, themeVariables: { darkMode: true, background: '#1a1a2e', primaryColor: '#2d2b55', primaryTextColor: '#e2e8f0', primaryBorderColor: '#7c8db5', lineColor: '#8b9dc3', secondaryColor: '#252547', tertiaryColor: '#1e1e3a', noteBkgColor: '#2d2b55', noteTextColor: '#e2e8f0', noteBorderColor: '#7c8db5', actorBkg: '#2d2b55', actorTextColor: '#e2e8f0', actorBorder: '#7c8db5', signalColor: '#e2e8f0', labelBoxBkgColor: '#2d2b55', labelTextColor: '#e2e8f0' } };
-
   const PREFS_KEY = 'claude-plans-prefs';
   function loadPrefs() {
     try { return JSON.parse(localStorage.getItem(PREFS_KEY) || '{}'); } catch(e) { return {}; }
@@ -38,21 +35,6 @@ defmodule ClaudePlans.Web.Layouts do
   function applyTheme(t) {
     document.documentElement.setAttribute('data-theme', t);
     localStorage.setItem('claude-plans-theme', t);
-    if (typeof mermaid !== 'undefined') {
-      mermaid.initialize(t === 'dark' ? DARK_MERMAID : LIGHT_MERMAID);
-      document.querySelectorAll('.mermaid[data-processed]').forEach(div => {
-        const src = div.getAttribute('data-mermaid-src');
-        if (src) {
-          div.removeAttribute('data-processed');
-          div.innerHTML = '';
-          div.textContent = src;
-        }
-      });
-      const stale = document.querySelectorAll('.mermaid:not([data-processed])');
-      if (stale.length > 0) {
-        mermaid.run({ nodes: Array.from(stale) }).catch(e => console.error("Mermaid re-render:", e));
-      }
-    }
     const moonSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>';
     const sunSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>';
     document.querySelectorAll('.cb-theme-toggle').forEach(b => b.innerHTML = t === 'dark' ? sunSvg : moonSvg);
@@ -118,23 +100,8 @@ defmodule ClaudePlans.Web.Layouts do
   Hooks.PlanContent = {
     mounted() { this.render(); this.setupInspector(); },
     updated() { this.render(); },
-    async render() {
-      if (typeof mermaid !== 'undefined') {
-        const blocks = this.el.querySelectorAll("pre > code.language-mermaid");
-        for (const block of blocks) {
-          const pre = block.parentElement;
-          const div = document.createElement("div");
-          div.className = "mermaid";
-          div.textContent = block.textContent;
-          div.setAttribute('data-mermaid-src', block.textContent);
-          pre.replaceWith(div);
-        }
-        const divs = this.el.querySelectorAll(".mermaid:not([data-processed])");
-        if (divs.length > 0) {
-          try { await mermaid.run({ nodes: Array.from(divs) }); } catch (e) { console.error("Mermaid:", e); }
-          divs.forEach(div => this.tagMermaidElements(div));
-        }
-      }
+    render() {
+      this.el.querySelectorAll(".mermaid").forEach(div => this.tagMermaidElements(div));
       this.highlightSearch();
       this.applyAnnotationMarkers();
       this.setupEdgeHitTargets();
@@ -729,8 +696,6 @@ defmodule ClaudePlans.Web.Layouts do
       </head>
       <body>
         {@inner_content}
-        <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
-        {raw("<script>mermaid.initialize({ startOnLoad: false });</script>")}
         {raw("<script>" <> @phoenix_js <> "</script>")}
         {raw("<script>" <> @app_js <> "</script>")}
       </body>
