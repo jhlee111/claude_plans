@@ -174,7 +174,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 [data-theme="dark"] .cp-content li { color: #eee; }
 
 /* Mermaid dark */
-[data-theme="dark"] .cp-content .mermaid { background: #000; }
+[data-theme="dark"] .cp-content .mermaid { background: #1a1a2e; }
 
 /* ================================================
    Search
