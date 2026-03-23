@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] - 2026-03-23
+
+### Added
+- Inline activity tab navigation — j/k and click now select events in-place with diff preview in the main content area, instead of navigating away
+- "Go to file" action via Enter key, header button, or per-row `›` arrow icon to explicitly navigate to the source file
+- Active row highlighting in activity sidebar with scroll-into-view support
+
+### Changed
+- Activity tab main content shows diff preview when an event is selected (was a static placeholder)
+- Escape key clears activity selection before other dismiss actions
+- New activity events shift the selected index to maintain position
+
+### Improved
+- Resolved all 23 credo static analysis issues across 7 files (complexity, nesting, naming, efficiency)
+- Extracted helpers to reduce cyclomatic complexity in `handle_params`, `handle_event`, `handle_info`
+- Renamed `is_plan_path?`/`is_project_path?` to `plan_path?`/`project_path?` per Elixir convention
+- Replaced `Enum.map |> Enum.join` with `Enum.map_join`, merged double `Enum.filter`
+
 ## [0.7.0] - 2026-03-23
 
 ### Added
