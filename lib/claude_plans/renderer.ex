@@ -14,12 +14,7 @@ defmodule ClaudePlans.Renderer do
       syntax_highlight: [
         formatter: {:html_inline, [theme: "github_light"]}
       ],
-      codefence_renderers: %{
-        "mermaid" => fn _lang, _meta, code ->
-          escaped = code |> Phoenix.HTML.html_escape() |> Phoenix.HTML.safe_to_string()
-          ~s(<pre><code class="language-mermaid">#{escaped}</code></pre>)
-        end
-      }
+      plugins: [{MDExMermex, class: "mermaid"}]
     )
   end
 

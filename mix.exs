@@ -38,6 +38,7 @@ defmodule ClaudePlans.MixProject do
       {:jason, "~> 1.0"},
       {:bandit, "~> 1.0"},
       {:mdex, "~> 0.10"},
+      {:mdex_mermex, "~> 0.1.1"},
       {:file_system, "~> 1.0"},
       {:phoenix_live_reload, "~> 1.2", only: :dev},
       {:burrito, "~> 1.5", only: :prod},
