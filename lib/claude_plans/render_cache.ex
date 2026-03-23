@@ -88,38 +88,12 @@ defmodule ClaudePlans.RenderCache do
   # --- Private ---
 
   defp do_prerender_async(paths) do
-    # Filter out paths whose content is already cached
-    paths_to_render =
-      Enum.filter(paths, fn path ->
-        case File.read(path) do
-          {:ok, content} -> not cached?(content)
-          _ -> false
-        end
-      end)
+    paths_to_render = Enum.filter(paths, &uncached_path?/1)
 
     if paths_to_render != [] do
       Task.Supervisor.start_child(ClaudePlans.TaskSupervisor, fn ->
         paths_to_render
-        |> Task.async_stream(
-          fn path ->
-            case File.read(path) do
-              {:ok, content} ->
-                hash = content_hash(content)
-
-                case :ets.lookup(@table, hash) do
-                  [{^hash, _}] ->
-                    :already_cached
-
-                  [] ->
-                    html = ClaudePlans.Renderer.to_html(content)
-                    :ets.insert(@table, {hash, html})
-                    :rendered
-                end
-
-              _ ->
-                :error
-            end
-          end,
+        |> Task.async_stream(&render_file/1,
           max_concurrency: System.schedulers_online(),
           timeout: 30_000,
           on_timeout: :kill_task
@@ -128,6 +102,34 @@ defmodule ClaudePlans.RenderCache do
 
         Logger.debug("[RenderCache] Pre-rendered #{length(paths_to_render)} files")
       end)
+    end
+  end
+
+  defp uncached_path?(path) do
+    case File.read(path) do
+      {:ok, content} -> not cached?(content)
+      _ -> false
+    end
+  end
+
+  defp render_file(path) do
+    case File.read(path) do
+      {:ok, content} -> cache_content(content)
+      _ -> :error
+    end
+  end
+
+  defp cache_content(content) do
+    hash = content_hash(content)
+
+    case :ets.lookup(@table, hash) do
+      [{^hash, _}] ->
+        :already_cached
+
+      [] ->
+        html = ClaudePlans.Renderer.to_html(content)
+        :ets.insert(@table, {hash, html})
+        :rendered
     end
   end
 

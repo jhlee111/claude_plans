@@ -245,42 +245,10 @@ defmodule ClaudePlans.Web.BrowserLive do
   def handle_event("kb_navigate", %{"direction" => dir}, socket) do
     list = visible_list(socket)
     max_idx = max(length(list) - 1, 0)
+    current = kb_current_index(socket)
+    new_idx = kb_resolve_index(dir, current, max_idx, list)
 
-    current =
-      if socket.assigns.search_query != "" do
-        current_search_result_index(socket)
-      else
-        current_selection_index(socket)
-      end
-
-    new_idx =
-      case {dir, current} do
-        {_, _} when list == [] -> nil
-        {"top", _} -> 0
-        {"bottom", _} -> max_idx
-        {"down", nil} -> 0
-        {"down", i} when i >= max_idx -> max_idx
-        {"down", i} -> i + 1
-        {"up", nil} -> max_idx
-        {"up", 0} -> 0
-        {"up", i} -> i - 1
-      end
-
-    if new_idx != nil do
-      case Enum.at(list, new_idx) do
-        nil ->
-          {:noreply, socket}
-
-        item ->
-          if socket.assigns.search_query != "" do
-            select_search_result(socket, item)
-          else
-            select_visible_item(socket, item)
-          end
-      end
-    else
-      {:noreply, socket}
-    end
+    kb_apply_navigation(socket, list, new_idx)
   end
 
   def handle_event("kb_select", _params, socket) do
@@ -578,69 +546,18 @@ defmodule ClaudePlans.Web.BrowserLive do
   @impl true
   def handle_info({:plan_updated, _filename}, socket) do
     plans = Watcher.list_plans()
-
-    {selected, html} =
-      if socket.assigns.selected do
-        case Enum.find(plans, &(&1.filename == socket.assigns.selected)) do
-          nil ->
-            case plans do
-              [first | _] -> {first.filename, RenderCache.render(File.read!(first.path))}
-              [] -> {nil, nil}
-            end
-
-          plan ->
-            {plan.filename, RenderCache.render(File.read!(plan.path))}
-        end
-      else
-        case plans do
-          [first | _] -> {first.filename, RenderCache.render(File.read!(first.path))}
-          [] -> {nil, nil}
-        end
-      end
-
-    has_annotations =
-      if selected do
-        path = Path.join(ClaudePlans.plans_dir(), selected)
-
-        case File.read(path) do
-          {:ok, content} -> has_file_annotations?(content)
-          _ -> false
-        end
-      else
-        false
-      end
+    {selected, html} = resolve_selected_plan(plans, socket.assigns.selected)
+    has_annotations = check_annotations(selected)
 
     socket =
-      assign(socket,
+      socket
+      |> assign(
         plans: plans,
         selected: selected,
         html: html,
         has_file_annotations: has_annotations
       )
-
-    # Refresh versions for selected plan
-    socket =
-      if selected do
-        versions = VersionStore.list_versions(selected)
-        socket = assign(socket, versions: versions)
-
-        # If in diff mode, recompute diff with current selections
-        if socket.assigns.view_mode == :diff && socket.assigns.diff_version_a &&
-             socket.assigns.diff_version_b do
-          diff_html =
-            VersionStore.diff(
-              selected,
-              socket.assigns.diff_version_a,
-              socket.assigns.diff_version_b
-            )
-
-          assign(socket, diff_html: diff_html)
-        else
-          socket
-        end
-      else
-        assign(socket, versions: [], view_mode: :rendered, diff_html: nil)
-      end
+      |> refresh_versions(selected)
 
     {:noreply, socket}
   end
@@ -1102,6 +1019,41 @@ defmodule ClaudePlans.Web.BrowserLive do
     end
   end
 
+  defp kb_current_index(socket) do
+    if socket.assigns.search_query != "" do
+      current_search_result_index(socket)
+    else
+      current_selection_index(socket)
+    end
+  end
+
+  defp kb_resolve_index(_dir, _current, _max_idx, []), do: nil
+  defp kb_resolve_index("top", _current, _max_idx, _list), do: 0
+  defp kb_resolve_index("bottom", _current, max_idx, _list), do: max_idx
+  defp kb_resolve_index("down", nil, _max_idx, _list), do: 0
+  defp kb_resolve_index("down", i, max_idx, _list) when i >= max_idx, do: max_idx
+  defp kb_resolve_index("down", i, _max_idx, _list), do: i + 1
+  defp kb_resolve_index("up", nil, max_idx, _list), do: max_idx
+  defp kb_resolve_index("up", 0, _max_idx, _list), do: 0
+  defp kb_resolve_index("up", i, _max_idx, _list), do: i - 1
+
+  defp kb_apply_navigation(socket, _list, nil), do: {:noreply, socket}
+
+  defp kb_apply_navigation(socket, list, new_idx) do
+    case Enum.at(list, new_idx) do
+      nil -> {:noreply, socket}
+      item -> kb_select_item(socket, item)
+    end
+  end
+
+  defp kb_select_item(socket, item) do
+    if socket.assigns.search_query != "" do
+      select_search_result(socket, item)
+    else
+      select_visible_item(socket, item)
+    end
+  end
+
   defp current_search_result_index(socket) do
     Enum.find_index(socket.assigns.search_results, fn
       %{source: :plan, filename: f} ->
@@ -1251,28 +1203,31 @@ defmodule ClaudePlans.Web.BrowserLive do
   end
 
   defp list_projects(projects_dir) do
-    case File.ls(projects_dir) do
-      {:ok, dirs} ->
-        dirs
-        |> Enum.filter(&File.dir?(Path.join(projects_dir, &1)))
-        |> Enum.map(fn dir_name ->
-          candidate = "/" <> (dir_name |> String.trim_leading("-") |> String.replace("-", "/"))
+    projects_dir
+    |> File.ls()
+    |> case do
+      {:ok, dirs} -> dirs
+      {:error, _} -> []
+    end
+    |> Enum.filter(&File.dir?(Path.join(projects_dir, &1)))
+    |> Enum.map(&build_project_entry(projects_dir, &1))
+    |> Enum.filter(& &1.has_memory?)
+    |> Enum.sort_by(& &1.display_name)
+  end
 
-          display =
-            if File.dir?(candidate) do
-              Path.relative_to(candidate, System.user_home!()) |> then(&"~/#{&1}")
-            else
-              dir_name |> String.trim_leading("-Users-#{System.get_env("USER", "user")}-")
-            end
+  defp build_project_entry(projects_dir, dir_name) do
+    display = project_display_name(dir_name)
+    has_memory? = File.dir?(Path.join([projects_dir, dir_name, "memory"]))
+    %{dir_name: dir_name, display_name: display, has_memory?: has_memory?}
+  end
 
-          has_memory? = File.dir?(Path.join([projects_dir, dir_name, "memory"]))
-          %{dir_name: dir_name, display_name: display, has_memory?: has_memory?}
-        end)
-        |> Enum.filter(& &1.has_memory?)
-        |> Enum.sort_by(& &1.display_name)
+  defp project_display_name(dir_name) do
+    candidate = "/" <> (dir_name |> String.trim_leading("-") |> String.replace("-", "/"))
 
-      {:error, _} ->
-        []
+    if File.dir?(candidate) do
+      Path.relative_to(candidate, System.user_home!()) |> then(&"~/#{&1}")
+    else
+      dir_name |> String.trim_leading("-Users-#{System.get_env("USER", "user")}-")
     end
   end
 
@@ -1284,17 +1239,66 @@ defmodule ClaudePlans.Web.BrowserLive do
   end
 
   defp list_md_files(dir, subdir) do
-    case File.ls(dir) do
-      {:ok, files} ->
-        files
-        |> Enum.filter(&String.ends_with?(&1, ".md"))
-        |> Enum.map(fn name ->
-          rel_path = if subdir, do: Path.join(subdir, name), else: name
-          %{name: name, dir: subdir, rel_path: rel_path}
-        end)
+    dir
+    |> File.ls()
+    |> case do
+      {:ok, files} -> files
+      {:error, _} -> []
+    end
+    |> Enum.filter(&String.ends_with?(&1, ".md"))
+    |> Enum.map(&md_file_entry(&1, subdir))
+  end
 
-      {:error, _} ->
-        []
+  defp md_file_entry(name, nil), do: %{name: name, dir: nil, rel_path: name}
+
+  defp md_file_entry(name, subdir),
+    do: %{name: name, dir: subdir, rel_path: Path.join(subdir, name)}
+
+  defp resolve_selected_plan(plans, current_selected) do
+    found = if current_selected, do: Enum.find(plans, &(&1.filename == current_selected))
+
+    case found do
+      nil -> select_first_plan(plans)
+      plan -> {plan.filename, RenderCache.render(File.read!(plan.path))}
+    end
+  end
+
+  defp select_first_plan([first | _]),
+    do: {first.filename, RenderCache.render(File.read!(first.path))}
+
+  defp select_first_plan([]), do: {nil, nil}
+
+  defp check_annotations(nil), do: false
+
+  defp check_annotations(selected) do
+    path = Path.join(ClaudePlans.plans_dir(), selected)
+
+    case File.read(path) do
+      {:ok, content} -> has_file_annotations?(content)
+      _ -> false
+    end
+  end
+
+  defp refresh_versions(socket, nil) do
+    assign(socket, versions: [], view_mode: :rendered, diff_html: nil)
+  end
+
+  defp refresh_versions(socket, selected) do
+    versions = VersionStore.list_versions(selected)
+    socket = assign(socket, versions: versions)
+
+    if socket.assigns.view_mode == :diff && socket.assigns.diff_version_a &&
+         socket.assigns.diff_version_b do
+      diff_html =
+        VersionStore.diff(
+          selected,
+          socket.assigns.diff_version_a,
+          socket.assigns.diff_version_b
+        )
+
+      assign(socket, diff_html: diff_html)
+    else
+      socket
     end
   end
 
@@ -1305,8 +1309,8 @@ defmodule ClaudePlans.Web.BrowserLive do
     cond do
       diff < 60 -> "just now"
       diff < 3600 -> "#{div(diff, 60)} min ago"
-      diff < 86400 -> "#{div(diff, 3600)}h ago"
-      diff < 86400 * 30 -> "#{div(diff, 86400)}d ago"
+      diff < 86_400 -> "#{div(diff, 3600)}h ago"
+      diff < 86_400 * 30 -> "#{div(diff, 86_400)}d ago"
       true -> posix_time |> DateTime.from_unix!() |> Calendar.strftime("%b %d, %Y")
     end
   end
@@ -1316,9 +1320,10 @@ defmodule ClaudePlans.Web.BrowserLive do
   end
 
   defp format_bytes(bytes) when is_integer(bytes) do
-    cond do
-      bytes >= 1024 -> "#{Float.round(bytes / 1024, 1)} KB"
-      true -> "#{bytes} B"
+    if bytes >= 1024 do
+      "#{Float.round(bytes / 1024, 1)} KB"
+    else
+      "#{bytes} B"
     end
   end
 

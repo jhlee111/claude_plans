@@ -21,22 +21,22 @@ defmodule ClaudePlans.Diff do
   defp flatten_lines(ops) do
     {lines, _old_ln, _new_ln} =
       Enum.reduce(ops, {[], 1, 1}, fn {op, texts}, {acc, old_ln, new_ln} ->
-        Enum.reduce(texts, {acc, old_ln, new_ln}, fn text, {acc, old_ln, new_ln} ->
-          case op do
-            :eq ->
-              {[{:eq, old_ln, new_ln, text} | acc], old_ln + 1, new_ln + 1}
-
-            :del ->
-              {[{:del, old_ln, nil, text} | acc], old_ln + 1, new_ln}
-
-            :ins ->
-              {[{:ins, nil, new_ln, text} | acc], old_ln, new_ln + 1}
-          end
+        Enum.reduce(texts, {acc, old_ln, new_ln}, fn text, {acc2, o, n} ->
+          tag_line(op, text, acc2, o, n)
         end)
       end)
 
     Enum.reverse(lines)
   end
+
+  defp tag_line(:eq, text, acc, old_ln, new_ln),
+    do: {[{:eq, old_ln, new_ln, text} | acc], old_ln + 1, new_ln + 1}
+
+  defp tag_line(:del, text, acc, old_ln, new_ln),
+    do: {[{:del, old_ln, nil, text} | acc], old_ln + 1, new_ln}
+
+  defp tag_line(:ins, text, acc, old_ln, new_ln),
+    do: {[{:ins, nil, new_ln, text} | acc], old_ln, new_ln + 1}
 
   # Collapse long equal runs into context + hunk separator + context
   defp collapse_equal_runs(lines) do
@@ -75,8 +75,7 @@ defmodule ClaudePlans.Diff do
 
   defp render_html(lines) do
     inner =
-      lines
-      |> Enum.map(fn
+      Enum.map_join(lines, "\n", fn
         {:hunk, count} ->
           ~s(<div class="cb-diff-hunk">... #{count} unchanged lines ...</div>)
 
@@ -92,7 +91,6 @@ defmodule ClaudePlans.Diff do
             ~s(<span class="cb-diff-text">#{escaped}</span>) <>
             ~s(</div>)
       end)
-      |> Enum.join("\n")
 
     ~s(<div class="cb-diff">#{inner}</div>)
   end

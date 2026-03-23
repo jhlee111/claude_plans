@@ -26,24 +26,27 @@ defmodule ClaudePlans.Watcher do
       {:ok, files} ->
         files
         |> Enum.filter(&String.ends_with?(&1, ".md"))
-        |> Enum.map(fn filename ->
-          path = Path.join(dir, filename)
-
-          case File.stat(path, time: :posix) do
-            {:ok, stat} ->
-              %{
-                filename: filename,
-                display_name: String.replace_trailing(filename, ".md", ""),
-                modified: stat.mtime,
-                path: path
-              }
-
-            {:error, _} ->
-              nil
-          end
-        end)
-        |> Enum.reject(&is_nil/1)
+        |> Enum.flat_map(&plan_entry(dir, &1))
         |> Enum.sort_by(& &1.modified, :desc)
+
+      {:error, _} ->
+        []
+    end
+  end
+
+  defp plan_entry(dir, filename) do
+    path = Path.join(dir, filename)
+
+    case File.stat(path, time: :posix) do
+      {:ok, stat} ->
+        [
+          %{
+            filename: filename,
+            display_name: String.replace_trailing(filename, ".md", ""),
+            modified: stat.mtime,
+            path: path
+          }
+        ]
 
       {:error, _} ->
         []

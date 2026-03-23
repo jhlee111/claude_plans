@@ -80,16 +80,19 @@ defmodule ClaudePlans.SearchIndex do
 
   defp plan_entries do
     dir = ClaudePlans.plans_dir()
+    if dir && File.dir?(dir), do: read_plan_files(dir), else: []
+  end
 
-    if dir && File.dir?(dir) do
-      dir
-      |> File.ls!()
-      |> Enum.filter(&String.ends_with?(&1, ".md"))
-      |> Enum.map(fn filename ->
-        path = Path.join(dir, filename)
+  defp read_plan_files(dir) do
+    dir
+    |> File.ls!()
+    |> Enum.filter(&String.ends_with?(&1, ".md"))
+    |> Enum.flat_map(fn filename ->
+      path = Path.join(dir, filename)
 
-        case File.read(path) do
-          {:ok, content} ->
+      case File.read(path) do
+        {:ok, content} ->
+          [
             %{
               source: :plan,
               project: nil,
@@ -99,38 +102,35 @@ defmodule ClaudePlans.SearchIndex do
               path: path,
               content: content
             }
-
-          {:error, _} ->
-            nil
-        end
-      end)
-      |> Enum.reject(&is_nil/1)
-    else
-      []
-    end
-  end
-
-  defp project_entries do
-    dir = ClaudePlans.projects_dir()
-
-    if dir && File.dir?(dir) do
-      case File.ls(dir) do
-        {:ok, dirs} ->
-          dirs
-          |> Enum.filter(fn d -> File.dir?(Path.join(dir, d)) end)
-          |> Enum.filter(fn d -> File.dir?(Path.join([dir, d, "memory"])) end)
-          |> Enum.flat_map(fn proj_dir ->
-            project_path = Path.join(dir, proj_dir)
-            root_files = md_entries(project_path, proj_dir, nil)
-            memory_files = md_entries(Path.join(project_path, "memory"), proj_dir, "memory")
-            root_files ++ memory_files
-          end)
+          ]
 
         {:error, _} ->
           []
       end
-    else
-      []
+    end)
+  end
+
+  defp project_entries do
+    dir = ClaudePlans.projects_dir()
+    if dir && File.dir?(dir), do: read_project_dirs(dir), else: []
+  end
+
+  defp read_project_dirs(dir) do
+    case File.ls(dir) do
+      {:ok, dirs} ->
+        dirs
+        |> Enum.filter(fn d ->
+          File.dir?(Path.join(dir, d)) and File.dir?(Path.join([dir, d, "memory"]))
+        end)
+        |> Enum.flat_map(fn proj_dir ->
+          project_path = Path.join(dir, proj_dir)
+
+          md_entries(project_path, proj_dir, nil) ++
+            md_entries(Path.join(project_path, "memory"), proj_dir, "memory")
+        end)
+
+      {:error, _} ->
+        []
     end
   end
 
@@ -139,27 +139,30 @@ defmodule ClaudePlans.SearchIndex do
       {:ok, files} ->
         files
         |> Enum.filter(&String.ends_with?(&1, ".md"))
-        |> Enum.map(fn filename ->
-          rel_path = if subdir, do: Path.join(subdir, filename), else: filename
-          path = Path.join(scan_dir, filename)
+        |> Enum.flat_map(&read_md_entry(scan_dir, proj_dir, subdir, &1))
 
-          case File.read(path) do
-            {:ok, content} ->
-              %{
-                source: :project,
-                project: proj_dir,
-                filename: filename,
-                display_name: String.replace_trailing(filename, ".md", ""),
-                rel_path: rel_path,
-                path: path,
-                content: content
-              }
+      {:error, _} ->
+        []
+    end
+  end
 
-            {:error, _} ->
-              nil
-          end
-        end)
-        |> Enum.reject(&is_nil/1)
+  defp read_md_entry(scan_dir, proj_dir, subdir, filename) do
+    rel_path = if subdir, do: Path.join(subdir, filename), else: filename
+    path = Path.join(scan_dir, filename)
+
+    case File.read(path) do
+      {:ok, content} ->
+        [
+          %{
+            source: :project,
+            project: proj_dir,
+            filename: filename,
+            display_name: String.replace_trailing(filename, ".md", ""),
+            rel_path: rel_path,
+            path: path,
+            content: content
+          }
+        ]
 
       {:error, _} ->
         []

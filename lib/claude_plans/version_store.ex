@@ -165,18 +165,21 @@ defmodule ClaudePlans.VersionStore do
       {:ok, files} ->
         files
         |> Enum.filter(&String.ends_with?(&1, ".history.json"))
-        |> Enum.reduce(%{}, fn file, acc ->
-          filename = String.replace_trailing(file, ".history.json", "")
-          path = Path.join(dir, file)
-
-          case load_history_file(path) do
-            {:ok, versions} -> Map.put(acc, filename, versions)
-            :error -> acc
-          end
-        end)
+        |> Map.new(&load_history_entry(dir, &1))
+        |> Map.reject(fn {_k, v} -> v == :error end)
 
       {:error, _} ->
         %{}
+    end
+  end
+
+  defp load_history_entry(dir, file) do
+    filename = String.replace_trailing(file, ".history.json", "")
+    path = Path.join(dir, file)
+
+    case load_history_file(path) do
+      {:ok, versions} -> {filename, versions}
+      :error -> {filename, :error}
     end
   end
 

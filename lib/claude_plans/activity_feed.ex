@@ -59,14 +59,7 @@ defmodule ClaudePlans.ActivityFeed do
   @impl true
   def handle_info({:file_event, _pid, {path, _events}}, state) do
     if relevant_path?(path, state.plans_dir, state.projects_dir) do
-      # Cancel existing debounce timer for this path
-      case Map.get(state.debounce_timers, path) do
-        nil -> :ok
-        ref -> Process.cancel_timer(ref)
-      end
-
-      ref = Process.send_after(self(), {:debounced_event, path}, @debounce_ms)
-      {:noreply, %{state | debounce_timers: Map.put(state.debounce_timers, path, ref)}}
+      {:noreply, debounce_path(state, path)}
     else
       {:noreply, state}
     end
@@ -82,34 +75,7 @@ defmodule ClaudePlans.ActivityFeed do
         {:noreply, state}
 
       {category, project, rel_path} ->
-        now = DateTime.utc_now()
-
-        event = %{
-          id: event_id(path, now),
-          path: path,
-          action: action,
-          category: category,
-          display_name: display_name(path, category),
-          project: project,
-          rel_path: rel_path,
-          filename: Path.basename(path),
-          timestamp: now
-        }
-
-        events = [event | state.events] |> Enum.take(@max_events)
-
-        known_files =
-          case action do
-            :deleted -> Map.delete(state.known_files, path)
-            _ -> update_known_file(state.known_files, path)
-          end
-
-        # Broadcast to subscribers
-        Registry.dispatch(ClaudePlans.Registry, :activity_updates, fn entries ->
-          for {pid, _} <- entries, do: send(pid, {:activity_event, event})
-        end)
-
-        {:noreply, %{state | events: events, known_files: known_files}}
+        process_activity_event(state, path, action, category, project, rel_path)
     end
   end
 
@@ -125,42 +91,79 @@ defmodule ClaudePlans.ActivityFeed do
     {:noreply, state}
   end
 
+  defp process_activity_event(state, path, action, category, project, rel_path) do
+    now = DateTime.utc_now()
+
+    event = %{
+      id: event_id(path, now),
+      path: path,
+      action: action,
+      category: category,
+      display_name: display_name(path, category),
+      project: project,
+      rel_path: rel_path,
+      filename: Path.basename(path),
+      timestamp: now
+    }
+
+    events = [event | state.events] |> Enum.take(@max_events)
+    known_files = update_known_files(state.known_files, path, action)
+
+    Registry.dispatch(ClaudePlans.Registry, :activity_updates, fn entries ->
+      for {pid, _} <- entries, do: send(pid, {:activity_event, event})
+    end)
+
+    {:noreply, %{state | events: events, known_files: known_files}}
+  end
+
+  defp update_known_files(known_files, path, :deleted), do: Map.delete(known_files, path)
+  defp update_known_files(known_files, path, _action), do: update_known_file(known_files, path)
+
   # --- Internal helpers ---
+
+  defp debounce_path(state, path) do
+    cancel_existing_timer(state.debounce_timers, path)
+    ref = Process.send_after(self(), {:debounced_event, path}, @debounce_ms)
+    %{state | debounce_timers: Map.put(state.debounce_timers, path, ref)}
+  end
+
+  defp cancel_existing_timer(timers, path) do
+    case Map.get(timers, path) do
+      nil -> :ok
+      ref -> Process.cancel_timer(ref)
+    end
+  end
 
   defp scan_known_files(plans_dir, projects_dir) do
     plan_files = scan_dir_files(plans_dir, "*.md")
-
-    project_files =
-      if is_binary(projects_dir) do
-        case File.ls(projects_dir) do
-          {:ok, dirs} ->
-            Enum.flat_map(dirs, fn dir ->
-              project_path = Path.join(projects_dir, dir)
-
-              if File.dir?(project_path) do
-                memory_files =
-                  scan_dir_files(Path.join(project_path, "memory"), "*.md")
-
-                claude_md = Path.join(project_path, "CLAUDE.md")
-
-                if File.exists?(claude_md) do
-                  [{claude_md, mtime_posix(claude_md)} | memory_files]
-                else
-                  memory_files
-                end
-              else
-                []
-              end
-            end)
-
-          {:error, _} ->
-            []
-        end
-      else
-        []
-      end
-
+    project_files = scan_project_files(projects_dir)
     Map.new(plan_files ++ project_files)
+  end
+
+  defp scan_project_files(projects_dir) when not is_binary(projects_dir), do: []
+
+  defp scan_project_files(projects_dir) do
+    case File.ls(projects_dir) do
+      {:ok, dirs} ->
+        dirs
+        |> Enum.map(&Path.join(projects_dir, &1))
+        |> Enum.filter(&File.dir?/1)
+        |> Enum.flat_map(&scan_single_project/1)
+
+      {:error, _} ->
+        []
+    end
+  end
+
+  defp scan_single_project(project_path) do
+    memory_files = scan_dir_files(Path.join(project_path, "memory"), "*.md")
+    claude_md = Path.join(project_path, "CLAUDE.md")
+
+    if File.exists?(claude_md) do
+      [{claude_md, mtime_posix(claude_md)} | memory_files]
+    else
+      memory_files
+    end
   end
 
   defp scan_dir_files(dir, pattern) do
@@ -182,56 +185,58 @@ defmodule ClaudePlans.ActivityFeed do
 
   defp relevant_path?(path, plans_dir, projects_dir) do
     String.ends_with?(path, ".md") and
-      (is_plan_path?(path, plans_dir) or is_project_path?(path, projects_dir))
+      (plan_path?(path, plans_dir) or project_path?(path, projects_dir))
   end
 
-  defp is_plan_path?(path, plans_dir) do
+  defp plan_path?(path, plans_dir) do
     is_binary(plans_dir) and String.starts_with?(path, plans_dir) and
       Path.dirname(path) == plans_dir
   end
 
-  defp is_project_path?(path, projects_dir) do
-    return = is_binary(projects_dir) and String.starts_with?(path, projects_dir)
+  defp project_path?(_path, projects_dir) when not is_binary(projects_dir), do: false
 
-    if return do
-      rel = Path.relative_to(path, projects_dir)
-      parts = Path.split(rel)
-
-      case parts do
-        [_project, "memory", _file] -> true
-        [_project, "CLAUDE.md"] -> true
-        _ -> false
-      end
+  defp project_path?(path, projects_dir) do
+    if String.starts_with?(path, projects_dir) do
+      path
+      |> Path.relative_to(projects_dir)
+      |> Path.split()
+      |> project_subpath?()
     else
       false
     end
   end
 
+  defp project_subpath?([_project, "memory", _file]), do: true
+  defp project_subpath?([_project, "CLAUDE.md"]), do: true
+  defp project_subpath?(_), do: false
+
   defp classify_path(path, plans_dir, projects_dir) do
     cond do
-      is_binary(plans_dir) and String.starts_with?(path, plans_dir) and
-          Path.dirname(path) == plans_dir ->
+      plan_path?(path, plans_dir) ->
         {:plan, nil, Path.basename(path)}
 
       is_binary(projects_dir) and String.starts_with?(path, projects_dir) ->
-        rel = Path.relative_to(path, projects_dir)
-        parts = Path.split(rel)
-
-        case parts do
-          [project, "memory", file] ->
-            {:project_memory, project, "memory/" <> file}
-
-          [project, "CLAUDE.md"] ->
-            {:project_config, project, "CLAUDE.md"}
-
-          _ ->
-            nil
-        end
+        classify_project_path(path, projects_dir)
 
       true ->
         nil
     end
   end
+
+  defp classify_project_path(path, projects_dir) do
+    path
+    |> Path.relative_to(projects_dir)
+    |> Path.split()
+    |> classify_project_parts()
+  end
+
+  defp classify_project_parts([project, "memory", file]),
+    do: {:project_memory, project, "memory/" <> file}
+
+  defp classify_project_parts([project, "CLAUDE.md"]),
+    do: {:project_config, project, "CLAUDE.md"}
+
+  defp classify_project_parts(_), do: nil
 
   defp determine_action(path, known_files) do
     existed? = Map.has_key?(known_files, path)
