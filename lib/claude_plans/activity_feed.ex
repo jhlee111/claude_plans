@@ -140,7 +140,9 @@ defmodule ClaudePlans.ActivityFeed do
   # --- Internal helpers ---
 
   defp debounce_path(state, path) do
-    timers = Debounce.debounce(state.debounce_timers, path, {:debounced_event, path}, @debounce_ms)
+    timers =
+      Debounce.debounce(state.debounce_timers, path, {:debounced_event, path}, @debounce_ms)
+
     %{state | debounce_timers: timers}
   end
 

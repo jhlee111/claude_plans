@@ -30,7 +30,7 @@ A4 (## Data Flow > diagram node A "Member checks in"): Where does this validatio
 - **Projects tab** — Browse project memory files across all Claude Code projects
 - **Dark / Light mode** — Auto-detects OS preference, toggle with one click, persisted in localStorage
 - **Server-side Markdown** — Rendered via MDEx with GitHub-style syntax highlighting
-- **Mermaid diagrams** — Automatic rendering of Mermaid code blocks
+- **Mermaid diagrams** — Server-side rendering via MDExMermex (no CDN) with semantic SVG output for node/edge annotation
 - **Full-text search** — Search across all plan and project files with instant results and in-document match highlighting
 - **Open in editor** — Click "Edit" or press `e` to open the selected file in your editor via `PLUG_EDITOR`
 - **Delete files** — Remove plan or project files with `x` or the delete button (with confirmation)

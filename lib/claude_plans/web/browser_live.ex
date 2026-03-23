@@ -229,7 +229,10 @@ defmodule ClaudePlans.Web.BrowserLive do
 
   def handle_event("search", %{"query" => query}, socket) do
     {:noreply,
-     push_patch(socket, to: UrlParams.build(socket.assigns, %{q: String.trim(query)}), replace: true)}
+     push_patch(socket,
+       to: UrlParams.build(socket.assigns, %{q: String.trim(query)}),
+       replace: true
+     )}
   end
 
   def handle_event("confirm_search", _params, socket) do
@@ -399,7 +402,8 @@ defmodule ClaudePlans.Web.BrowserLive do
       when cat in [:project_memory, :project_config] ->
         {:noreply,
          push_patch(socket,
-           to: UrlParams.build(socket.assigns, %{tab: :projects, project: project, file: rel_path})
+           to:
+             UrlParams.build(socket.assigns, %{tab: :projects, project: project, file: rel_path})
          )}
 
       _ ->
@@ -841,7 +845,8 @@ defmodule ClaudePlans.Web.BrowserLive do
          )}
 
       :projects ->
-        {:noreply, push_patch(socket, to: UrlParams.build(socket.assigns, %{file: item.rel_path}))}
+        {:noreply,
+         push_patch(socket, to: UrlParams.build(socket.assigns, %{file: item.rel_path}))}
 
       :activity ->
         idx = Enum.find_index(socket.assigns.activity_events, &(&1.id == item.id)) || 0
@@ -1127,5 +1132,4 @@ defmodule ClaudePlans.Web.BrowserLive do
         socket
     end
   end
-
 end

@@ -1,7 +1,7 @@
 defmodule ClaudePlans.MixProject do
   use Mix.Project
 
-  @version "0.7.1"
+  @version "0.8.0"
 
   def project do
     [
@@ -38,7 +38,8 @@ defmodule ClaudePlans.MixProject do
       {:bandit, "~> 1.0"},
       {:mdex, "~> 0.10"},
       {:rustler, ">= 0.0.0", optional: true},
-      {:mermex, github: "jhlee111/mermex", branch: "feat/semantic-node-attributes", override: true},
+      {:mermex,
+       github: "jhlee111/mermex", branch: "feat/semantic-node-attributes", override: true},
       {:mdex_mermex, "~> 0.1.1"},
       {:file_system, "~> 1.0"},
       {:phoenix_live_reload, "~> 1.2", only: :dev},
