@@ -37,6 +37,8 @@ defmodule ClaudePlans.MixProject do
       {:jason, "~> 1.0"},
       {:bandit, "~> 1.0"},
       {:mdex, "~> 0.10"},
+      {:rustler, ">= 0.0.0", optional: true},
+      {:mermex, github: "jhlee111/mermex", branch: "feat/semantic-node-attributes", override: true},
       {:mdex_mermex, "~> 0.1.1"},
       {:file_system, "~> 1.0"},
       {:phoenix_live_reload, "~> 1.2", only: :dev},
