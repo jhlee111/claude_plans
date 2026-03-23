@@ -20,6 +20,16 @@ defmodule ClaudePlans.Web.Layouts do
   const LIGHT_MERMAID = { theme: 'base', startOnLoad: false, themeVariables: { darkMode: false, background: '#ffffff', primaryColor: '#eef2ff', primaryTextColor: '#1e293b', primaryBorderColor: '#94a3b8', lineColor: '#64748b', secondaryColor: '#f1f5f9', tertiaryColor: '#f8fafc' } };
   const DARK_MERMAID = { theme: 'base', startOnLoad: false, themeVariables: { darkMode: true, background: '#1a1a2e', primaryColor: '#2d2b55', primaryTextColor: '#e2e8f0', primaryBorderColor: '#7c8db5', lineColor: '#8b9dc3', secondaryColor: '#252547', tertiaryColor: '#1e1e3a', noteBkgColor: '#2d2b55', noteTextColor: '#e2e8f0', noteBorderColor: '#7c8db5', actorBkg: '#2d2b55', actorTextColor: '#e2e8f0', actorBorder: '#7c8db5', signalColor: '#e2e8f0', labelBoxBkgColor: '#2d2b55', labelTextColor: '#e2e8f0' } };
 
+  const PREFS_KEY = 'claude-plans-prefs';
+  function loadPrefs() {
+    try { return JSON.parse(localStorage.getItem(PREFS_KEY) || '{}'); } catch(e) { return {}; }
+  }
+  function savePrefs(update) {
+    const prefs = loadPrefs();
+    Object.assign(prefs, update);
+    localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+  }
+
   function getTheme() {
     const stored = localStorage.getItem('claude-plans-theme');
     if (stored) return stored;
@@ -540,13 +550,14 @@ defmodule ClaudePlans.Web.Layouts do
   };
   function scrollHighlightedIntoView() {
     setTimeout(() => {
-      const el = document.querySelector('.cb-file-btn--active');
+      const el = document.querySelector('.cb-file-btn--active') || document.querySelector('.cb-activity-row-wrap.cb-activity-row--active');
       if (el) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }, 50);
   }
   Hooks.KeyboardNav = {
     mounted() {
       this._pendingG = false;
+      this.handleEvent("save_preferences", (prefs) => { savePrefs(prefs); });
       this.handleKeyDown = (e) => {
         if (!document.hasFocus()) return;
         const tag = document.activeElement?.tagName;
@@ -686,7 +697,10 @@ defmodule ClaudePlans.Web.Layouts do
   };
   let csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content");
   let liveSocket = new window.LiveView.LiveSocket("/live", window.Phoenix.Socket, {
-    params: { _csrf_token: csrfToken },
+    params: () => {
+      const prefs = loadPrefs();
+      return { _csrf_token: csrfToken, font_size: prefs.font_size || 16 };
+    },
     hooks: Hooks
   });
   liveSocket.connect();

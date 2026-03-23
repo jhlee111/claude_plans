@@ -16,22 +16,26 @@ defmodule ClaudePlans.Web.BrowserLive do
       ActivityFeed.subscribe()
     end
 
+    font_size =
+      if connected?(socket) do
+        case get_connect_params(socket) do
+          %{"font_size" => size} when is_integer(size) and size >= 10 and size <= 28 -> size
+          _ -> 16
+        end
+      else
+        16
+      end
+
     plans = Watcher.list_plans()
     projects_dir = ClaudePlans.projects_dir()
     projects = list_projects(projects_dir)
-
-    {selected, html} =
-      case plans do
-        [first | _] -> {first.filename, RenderCache.render(File.read!(first.path))}
-        [] -> {nil, nil}
-      end
 
     {:ok,
      assign(socket,
        active_tab: :plans,
        plans: plans,
-       selected: selected,
-       html: html,
+       selected: nil,
+       html: nil,
        projects: projects,
        selected_project: nil,
        project_files: [],
@@ -48,133 +52,173 @@ defmodule ClaudePlans.Web.BrowserLive do
        diff_version_a: nil,
        diff_version_b: nil,
        show_versions: false,
-       font_size: 16,
+       font_size: font_size,
        activity_events: ActivityFeed.list_events(),
        unseen_activity_count: 0,
+       unchecked_plan_files: VersionStore.unchecked_files(),
        inspector_mode: false,
        annotations: [],
        annotation_counter: 0,
        editing_annotation: nil,
        show_annotation_panel: false,
-       has_file_annotations: false
+       has_file_annotations: false,
+       selected_activity_index: nil,
+       activity_diff_html: nil
      )}
   end
+
+  @impl true
+  def handle_params(params, _uri, socket) do
+    tab = parse_tab(params["tab"])
+    query = params["q"] || ""
+
+    socket =
+      socket
+      |> apply_tab_switch(tab)
+      |> apply_plan_selection(tab, params["plan"])
+      |> apply_project_selection(tab, params["project"], params["file"])
+      |> apply_search(query)
+      |> apply_view_mode(tab, params["view"])
+
+    {:noreply, socket}
+  end
+
+  defp apply_tab_switch(socket, tab) when tab == socket.assigns.active_tab, do: socket
+
+  defp apply_tab_switch(socket, :projects) do
+    socket = assign(socket, active_tab: :projects, content_highlight: nil)
+
+    if is_nil(socket.assigns.selected_project) and socket.assigns.projects != [] do
+      [first | _] = socket.assigns.projects
+      load_project(socket, first.dir_name)
+    else
+      socket
+    end
+  end
+
+  defp apply_tab_switch(socket, :activity) do
+    assign(socket,
+      active_tab: :activity,
+      content_highlight: nil,
+      unseen_activity_count: 0,
+      selected_activity_index: nil,
+      activity_diff_html: nil
+    )
+  end
+
+  defp apply_tab_switch(socket, tab) do
+    assign(socket, active_tab: tab, content_highlight: nil)
+  end
+
+  defp apply_plan_selection(socket, :plans, plan_param) do
+    resolved_plan = resolve_plan(plan_param, socket)
+
+    if resolved_plan && resolved_plan != socket.assigns.selected do
+      load_plan_state(socket, resolved_plan)
+    else
+      socket
+    end
+  end
+
+  defp apply_plan_selection(socket, _tab, _plan_param), do: socket
+
+  defp apply_project_selection(socket, :projects, project, file) do
+    socket = apply_project_change(socket, project)
+    apply_file_change(socket, file)
+  end
+
+  defp apply_project_selection(socket, _tab, _project, _file), do: socket
+
+  defp apply_project_change(socket, project)
+       when is_binary(project) and project != "" do
+    if project != socket.assigns.selected_project and
+         Enum.any?(socket.assigns.projects, &(&1.dir_name == project)) do
+      load_project(socket, project)
+    else
+      socket
+    end
+  end
+
+  defp apply_project_change(socket, _project), do: socket
+
+  defp apply_file_change(socket, file)
+       when is_binary(file) and file != "" do
+    if file != socket.assigns.selected_file and socket.assigns.selected_project do
+      load_file_state(socket, file)
+    else
+      socket
+    end
+  end
+
+  defp apply_file_change(socket, _file), do: socket
+
+  defp apply_search(socket, query) when query == socket.assigns.search_query, do: socket
+
+  defp apply_search(socket, ""),
+    do: assign(socket, search_query: "", search_results: [], content_highlight: nil)
+
+  defp apply_search(socket, query) do
+    results = SearchIndex.search(query)
+    prerender_search_results(results, socket.assigns.projects_dir)
+    assign(socket, search_query: query, search_results: results, content_highlight: nil)
+  end
+
+  defp prerender_search_results([], _projects_dir), do: :ok
+
+  defp prerender_search_results(results, projects_dir) do
+    paths = search_result_paths(results, projects_dir)
+    RenderCache.prerender(paths)
+  end
+
+  defp apply_view_mode(socket, :plans, "diff") do
+    if socket.assigns.view_mode != :diff and length(socket.assigns.versions) >= 2 do
+      [latest, previous | _] = socket.assigns.versions
+      diff_html = VersionStore.diff(socket.assigns.selected, previous.id, latest.id)
+
+      assign(socket,
+        view_mode: :diff,
+        diff_html: diff_html,
+        diff_version_a: previous.id,
+        diff_version_b: latest.id
+      )
+    else
+      socket
+    end
+  end
+
+  defp apply_view_mode(socket, _tab, _view), do: socket
 
   # --- Events ---
 
   @impl true
   def handle_event("switch_tab", %{"tab" => tab}, socket) do
-    tab = String.to_existing_atom(tab)
-
-    socket =
-      case tab do
-        :projects
-        when is_nil(socket.assigns.selected_project) and socket.assigns.projects != [] ->
-          [first | _] = socket.assigns.projects
-          load_project(socket, first.dir_name)
-
-        _ ->
-          socket
-      end
-
-    socket =
-      if tab == :activity do
-        assign(socket, unseen_activity_count: 0)
-      else
-        socket
-      end
-
-    {:noreply, assign(socket, active_tab: tab, content_highlight: nil)}
+    {:noreply,
+     push_patch(socket, to: build_url_params(socket, %{tab: String.to_existing_atom(tab)}))}
   end
 
   def handle_event("select_plan", %{"filename" => filename}, socket) do
-    path = Path.join(ClaudePlans.plans_dir(), filename)
-
-    case File.read(path) do
-      {:ok, content} ->
-        VersionStore.snapshot(filename)
-        versions = VersionStore.list_versions(filename)
-
-        # Pre-render nearby plans in background
-        plans = socket.assigns.plans
-        idx = Enum.find_index(plans, &(&1.filename == filename)) || 0
-        nearby_paths = Enum.map(plans, & &1.path)
-        RenderCache.prerender_nearby(nearby_paths, idx)
-
-        {:noreply,
-         assign(socket,
-           selected: filename,
-           html: RenderCache.render(content),
-           content_highlight: nil,
-           versions: versions,
-           view_mode: :rendered,
-           diff_html: nil,
-           diff_version_a: nil,
-           diff_version_b: nil,
-           show_versions: false,
-           annotations: [],
-           annotation_counter: 0,
-           inspector_mode: false,
-           show_annotation_panel: false,
-           editing_annotation: nil,
-           has_file_annotations: has_file_annotations?(content)
-         )}
-
-      {:error, _} ->
-        {:noreply, socket}
-    end
+    {:noreply,
+     push_patch(socket, to: build_url_params(socket, %{plan: filename, view: :rendered}))}
   end
 
   def handle_event("select_project", %{"project" => ""}, socket), do: {:noreply, socket}
 
   def handle_event("select_project", %{"project" => dir_name}, socket) do
-    {:noreply, load_project(socket, dir_name)}
+    {:noreply,
+     push_patch(socket,
+       to: build_url_params(socket, %{tab: :projects, project: dir_name, file: nil})
+     )}
   end
 
   def handle_event("select_file", %{"path" => rel_path}, socket) do
-    full_path =
-      Path.join([socket.assigns.projects_dir, socket.assigns.selected_project, rel_path])
-
-    case File.read(full_path) do
-      {:ok, content} ->
-        # Pre-render nearby project files in background
-        project_files = socket.assigns.project_files
-        idx = Enum.find_index(project_files, &(&1.rel_path == rel_path)) || 0
-        base = Path.join(socket.assigns.projects_dir, socket.assigns.selected_project)
-        nearby_paths = Enum.map(project_files, &Path.join(base, &1.rel_path))
-        RenderCache.prerender_nearby(nearby_paths, idx)
-
-        {:noreply,
-         assign(socket,
-           selected_file: rel_path,
-           file_html: RenderCache.render(content),
-           content_highlight: nil
-         )}
-
-      {:error, _} ->
-        {:noreply, socket}
-    end
+    {:noreply, push_patch(socket, to: build_url_params(socket, %{file: rel_path}))}
   end
 
   # --- Search ---
 
   def handle_event("search", %{"query" => query}, socket) do
-    query = String.trim(query)
-
-    results = if query == "", do: [], else: SearchIndex.search(query)
-
-    # Pre-render search result files in background
-    if results != [] do
-      paths = search_result_paths(results, socket.assigns.projects_dir)
-      RenderCache.prerender(paths)
-    end
-
     {:noreply,
-     assign(socket,
-       search_query: query,
-       search_results: results,
-       content_highlight: nil
-     )}
+     push_patch(socket, to: build_url_params(socket, %{q: String.trim(query)}), replace: true)}
   end
 
   def handle_event("confirm_search", _params, socket) do
@@ -184,12 +228,7 @@ defmodule ClaudePlans.Web.BrowserLive do
   end
 
   def handle_event("clear_search", _params, socket) do
-    {:noreply,
-     assign(socket,
-       search_query: "",
-       search_results: [],
-       content_highlight: nil
-     )}
+    {:noreply, push_patch(socket, to: build_url_params(socket, %{q: ""}))}
   end
 
   def handle_event("select_search_result", %{"index" => idx_str}, socket) do
@@ -210,15 +249,20 @@ defmodule ClaudePlans.Web.BrowserLive do
         diff_html = VersionStore.diff(socket.assigns.selected, previous.id, latest.id)
 
         {:noreply,
-         assign(socket,
+         socket
+         |> assign(
            view_mode: :diff,
            diff_html: diff_html,
            diff_version_a: previous.id,
            diff_version_b: latest.id
-         )}
+         )
+         |> push_patch(to: build_url_params(socket, %{view: :diff}), replace: true)}
 
       :diff ->
-        {:noreply, assign(socket, view_mode: :rendered)}
+        {:noreply,
+         socket
+         |> assign(view_mode: :rendered)
+         |> push_patch(to: build_url_params(socket, %{view: :rendered}), replace: true)}
 
       _ ->
         {:noreply, socket}
@@ -252,25 +296,10 @@ defmodule ClaudePlans.Web.BrowserLive do
   end
 
   def handle_event("kb_select", _params, socket) do
-    list = visible_list(socket)
-
-    idx =
-      if socket.assigns.search_query != "" do
-        current_search_result_index(socket)
-      else
-        current_selection_index(socket)
-      end
-
-    case Enum.at(list, idx || -1) do
-      nil ->
-        {:noreply, socket}
-
-      item ->
-        if socket.assigns.search_query != "" do
-          select_search_result(socket, item)
-        else
-          select_visible_item(socket, item)
-        end
+    if socket.assigns.active_tab == :activity and socket.assigns.search_query == "" do
+      handle_event("goto_activity_file", %{}, socket)
+    else
+      kb_select_from_list(socket)
     end
   end
 
@@ -283,38 +312,7 @@ defmodule ClaudePlans.Web.BrowserLive do
   end
 
   def handle_event("kb_escape", _params, socket) do
-    socket =
-      cond do
-        socket.assigns.inspector_mode ->
-          assign(socket, inspector_mode: false)
-
-        socket.assigns.show_annotation_panel ->
-          assign(socket, show_annotation_panel: false)
-
-        socket.assigns.view_mode == :diff ->
-          assign(socket, view_mode: :rendered)
-
-        socket.assigns.show_versions ->
-          assign(socket, show_versions: false)
-
-        socket.assigns.show_help ->
-          assign(socket, show_help: false)
-
-        socket.assigns.content_highlight != nil ->
-          assign(socket, content_highlight: nil)
-
-        socket.assigns.search_query != "" ->
-          assign(socket,
-            search_query: "",
-            search_results: [],
-            content_highlight: nil
-          )
-
-        true ->
-          socket
-      end
-
-    {:noreply, socket}
+    {:noreply, dismiss_topmost_layer(socket)}
   end
 
   def handle_event("kb_tab", %{"tab" => tab}, socket) do
@@ -322,7 +320,9 @@ defmodule ClaudePlans.Web.BrowserLive do
       assign(socket,
         search_query: "",
         search_results: [],
-        content_highlight: nil
+        content_highlight: nil,
+        selected_activity_index: nil,
+        activity_diff_html: nil
       )
 
     handle_event("switch_tab", %{"tab" => tab}, socket)
@@ -333,15 +333,22 @@ defmodule ClaudePlans.Web.BrowserLive do
   end
 
   def handle_event("font_size", %{"dir" => "up"}, socket) do
-    {:noreply, assign(socket, font_size: min(socket.assigns.font_size + 2, 28))}
+    size = min(socket.assigns.font_size + 2, 28)
+
+    {:noreply,
+     socket |> assign(font_size: size) |> push_event("save_preferences", %{font_size: size})}
   end
 
   def handle_event("font_size", %{"dir" => "down"}, socket) do
-    {:noreply, assign(socket, font_size: max(socket.assigns.font_size - 2, 10))}
+    size = max(socket.assigns.font_size - 2, 10)
+
+    {:noreply,
+     socket |> assign(font_size: size) |> push_event("save_preferences", %{font_size: size})}
   end
 
   def handle_event("font_size", %{"dir" => "reset"}, socket) do
-    {:noreply, assign(socket, font_size: 16)}
+    {:noreply,
+     socket |> assign(font_size: 16) |> push_event("save_preferences", %{font_size: 16})}
   end
 
   def handle_event("select_activity_event", %{"index" => idx_str}, socket) do
@@ -351,23 +358,38 @@ defmodule ClaudePlans.Web.BrowserLive do
       nil ->
         {:noreply, socket}
 
+      event ->
+        diff_html = compute_activity_diff(event)
+
+        {:noreply,
+         assign(socket,
+           selected_activity_index: idx,
+           activity_diff_html: diff_html
+         )}
+    end
+  end
+
+  def handle_event("goto_activity_file_at", %{"index" => idx_str}, socket) do
+    idx = String.to_integer(idx_str)
+    socket = assign(socket, selected_activity_index: idx)
+    handle_event("goto_activity_file", %{}, socket)
+  end
+
+  def handle_event("goto_activity_file", _params, socket) do
+    case Enum.at(socket.assigns.activity_events, socket.assigns.selected_activity_index || -1) do
+      nil ->
+        {:noreply, socket}
+
       %{category: :plan, filename: filename} ->
         socket = assign(socket, content_highlight: nil)
-
-        handle_event("switch_tab", %{"tab" => "plans"}, socket)
-        |> then(fn {:noreply, socket} ->
-          handle_event("select_plan", %{"filename" => filename}, socket)
-        end)
+        navigate_to_plan_diff(socket, filename)
 
       %{category: cat, project: project, rel_path: rel_path}
       when cat in [:project_memory, :project_config] ->
-        socket =
-          socket
-          |> assign(content_highlight: nil)
-          |> load_project(project)
-          |> assign(active_tab: :projects)
-
-        handle_event("select_file", %{"path" => rel_path}, socket)
+        {:noreply,
+         push_patch(socket,
+           to: build_url_params(socket, %{tab: :projects, project: project, file: rel_path})
+         )}
 
       _ ->
         {:noreply, socket}
@@ -559,7 +581,7 @@ defmodule ClaudePlans.Web.BrowserLive do
       )
       |> refresh_versions(selected)
 
-    {:noreply, socket}
+    {:noreply, assign(socket, unchecked_plan_files: VersionStore.unchecked_files())}
   end
 
   def handle_info({:activity_event, event}, socket) do
@@ -572,7 +594,26 @@ defmodule ClaudePlans.Web.BrowserLive do
         socket.assigns.unseen_activity_count + 1
       end
 
-    {:noreply, assign(socket, activity_events: events, unseen_activity_count: unseen)}
+    unchecked =
+      if event.category == :plan do
+        VersionStore.unchecked_files()
+      else
+        socket.assigns.unchecked_plan_files
+      end
+
+    selected_idx =
+      case socket.assigns.selected_activity_index do
+        nil -> nil
+        idx -> idx + 1
+      end
+
+    {:noreply,
+     assign(socket,
+       activity_events: events,
+       unseen_activity_count: unseen,
+       unchecked_plan_files: unchecked,
+       selected_activity_index: selected_idx
+     )}
   end
 
   # --- Render ---
@@ -685,7 +726,7 @@ defmodule ClaudePlans.Web.BrowserLive do
           <dl class="cb-help-grid">
             <dt><kbd>j</kbd> <kbd>k</kbd></dt><dd>Navigate down / up</dd>
             <dt><kbd>gg</kbd> <kbd>G</kbd></dt><dd>Jump to top / bottom</dd>
-            <dt><kbd>Enter</kbd> <kbd>l</kbd></dt><dd>Open selected item</dd>
+            <dt><kbd>Enter</kbd> <kbd>l</kbd></dt><dd>Open selected / Go to file (activity)</dd>
             <dt><kbd>/</kbd></dt><dd>Focus search</dd>
             <dt><kbd>Esc</kbd></dt><dd>Exit input → clear highlight → clear search</dd>
             <dt><kbd>n</kbd> <kbd>N</kbd></dt><dd>Next / prev match in doc</dd>
@@ -831,7 +872,7 @@ defmodule ClaudePlans.Web.BrowserLive do
       <span class="cb-section-label">Activity</span>
       <span class="cb-count">{length(@activity_events)}</span>
     </div>
-    <div :for={{event, idx} <- Enum.with_index(@activity_events)}>
+    <div :for={{event, idx} <- Enum.with_index(@activity_events)} class={"cb-activity-row-wrap#{if idx == @selected_activity_index, do: " cb-activity-row--active", else: ""}#{if event.category == :plan and event.filename in @unchecked_plan_files, do: " cb-activity-row--unread", else: ""}"}>
       <button
         phx-click="select_activity_event"
         phx-value-index={idx}
@@ -848,7 +889,18 @@ defmodule ClaudePlans.Web.BrowserLive do
             <span class="cb-activity-time" id={"time-#{event.id}"} phx-hook="TimeAgo" data-timestamp={DateTime.to_iso8601(event.timestamp)}></span>
           </div>
         </div>
+        <span
+          :if={event.category == :plan and event.filename in @unchecked_plan_files}
+          class="cb-activity-unread"
+        ></span>
       </button>
+      <button
+        :if={event.action != :deleted}
+        phx-click="goto_activity_file_at"
+        phx-value-index={idx}
+        class="cb-activity-goto"
+        title="Go to file"
+      >&rsaquo;</button>
     </div>
     <div :if={@activity_events == []} class="cb-empty">
       No activity yet.
@@ -858,11 +910,31 @@ defmodule ClaudePlans.Web.BrowserLive do
   end
 
   defp main_content(%{active_tab: :activity} = assigns) do
+    selected_event =
+      if assigns.selected_activity_index do
+        Enum.at(assigns.activity_events, assigns.selected_activity_index)
+      end
+
+    assigns = assign(assigns, :selected_event, selected_event)
+
     ~H"""
-    <div class="cb-placeholder">
+    <div :if={@activity_diff_html && @selected_event} class="cb-content-wrap">
+      <div class="cb-content-header">
+        <div class="cb-file-header">{@selected_event.display_name}</div>
+        <div class="cb-header-actions">
+          <button phx-click="goto_activity_file" class="cb-action-btn" title="Go to file (Enter)">
+            Go to file &rarr;
+          </button>
+        </div>
+      </div>
+      <div class={if @selected_event.category == :plan, do: "cb-diff-view", else: "cp-content"}>
+        {Phoenix.HTML.raw(@activity_diff_html)}
+      </div>
+    </div>
+    <div :if={is_nil(@activity_diff_html) || is_nil(@selected_event)} class="cb-placeholder">
       <div class="cb-placeholder-inner">
         <div class="cb-placeholder-title">Activity Feed</div>
-        <div class="cb-placeholder-hint">Click an event to view the file</div>
+        <div class="cb-placeholder-hint">Navigate with j/k, press Enter to go to file</div>
       </div>
     </div>
     """
@@ -967,6 +1039,110 @@ defmodule ClaudePlans.Web.BrowserLive do
 
   # --- Helpers ---
 
+  defp compute_activity_diff(%{category: :plan, filename: filename}) do
+    VersionStore.snapshot(filename)
+    versions = VersionStore.list_versions(filename)
+    checked_id = VersionStore.get_checked_version(filename)
+
+    case {checked_id, versions} do
+      {nil, [latest, previous | _]} ->
+        VersionStore.diff(filename, previous.id, latest.id)
+
+      {cid, [latest | _]} when cid == latest.id and length(versions) >= 2 ->
+        [_, previous | _] = versions
+        VersionStore.diff(filename, previous.id, latest.id)
+
+      {cid, [latest | _] = vers} when length(vers) >= 2 ->
+        if Enum.any?(vers, &(&1.id == cid)) do
+          VersionStore.diff(filename, cid, latest.id)
+        else
+          [_, previous | _] = vers
+          VersionStore.diff(filename, previous.id, latest.id)
+        end
+
+      _ ->
+        nil
+    end
+  end
+
+  defp compute_activity_diff(%{category: cat, project: project, rel_path: rel_path})
+       when cat in [:project_memory, :project_config] do
+    full_path = Path.join([ClaudePlans.projects_dir(), project, rel_path])
+
+    case File.read(full_path) do
+      {:ok, content} -> RenderCache.render(content)
+      {:error, _} -> nil
+    end
+  end
+
+  defp compute_activity_diff(_event), do: nil
+
+  defp navigate_to_plan_diff(socket, filename) do
+    path = Path.join(ClaudePlans.plans_dir(), filename)
+
+    case File.read(path) do
+      {:ok, content} ->
+        VersionStore.snapshot(filename)
+        versions = VersionStore.list_versions(filename)
+        checked_id = VersionStore.get_checked_version(filename)
+
+        {view_mode, diff_html, diff_a, diff_b} =
+          resolve_plan_diff_state(filename, checked_id, versions)
+
+        VersionStore.mark_checked(filename)
+
+        {:noreply,
+         socket
+         |> assign(
+           active_tab: :plans,
+           selected: filename,
+           html: RenderCache.render(content),
+           content_highlight: nil,
+           versions: versions,
+           view_mode: view_mode,
+           diff_html: diff_html,
+           diff_version_a: diff_a,
+           diff_version_b: diff_b,
+           show_versions: false,
+           annotations: [],
+           annotation_counter: 0,
+           inspector_mode: false,
+           show_annotation_panel: false,
+           editing_annotation: nil,
+           has_file_annotations: has_file_annotations?(content),
+           unchecked_plan_files: VersionStore.unchecked_files()
+         )
+         |> push_patch(
+           to: build_url_params(socket, %{tab: :plans, plan: filename, view: view_mode})
+         )}
+
+      {:error, _} ->
+        {:noreply, socket}
+    end
+  end
+
+  defp resolve_plan_diff_state(_filename, nil, _versions), do: {:rendered, nil, nil, nil}
+
+  defp resolve_plan_diff_state(_filename, cid, [latest | _]) when cid == latest.id,
+    do: {:rendered, nil, nil, nil}
+
+  defp resolve_plan_diff_state(filename, cid, [latest | _] = vers) when length(vers) >= 2 do
+    {diff_from, diff_to} = pick_diff_versions(cid, latest, vers)
+    html = VersionStore.diff(filename, diff_from, diff_to)
+    {:diff, html, diff_from, diff_to}
+  end
+
+  defp resolve_plan_diff_state(_filename, _checked_id, _versions), do: {:rendered, nil, nil, nil}
+
+  defp pick_diff_versions(cid, latest, vers) do
+    if Enum.any?(vers, &(&1.id == cid)) do
+      {cid, latest.id}
+    else
+      [^latest, previous | _] = vers
+      {previous.id, latest.id}
+    end
+  end
+
   @annotation_separator "\n---\n<!-- Annotations by developer -->\n"
 
   defp inject_annotations(content, annotations) do
@@ -1019,6 +1195,36 @@ defmodule ClaudePlans.Web.BrowserLive do
     end
   end
 
+  defp dismiss_topmost_layer(
+         %{assigns: %{active_tab: :activity, selected_activity_index: idx}} = socket
+       )
+       when not is_nil(idx) do
+    assign(socket, selected_activity_index: nil, activity_diff_html: nil)
+  end
+
+  defp dismiss_topmost_layer(%{assigns: %{inspector_mode: true}} = socket),
+    do: assign(socket, inspector_mode: false)
+
+  defp dismiss_topmost_layer(%{assigns: %{show_annotation_panel: true}} = socket),
+    do: assign(socket, show_annotation_panel: false)
+
+  defp dismiss_topmost_layer(%{assigns: %{view_mode: :diff}} = socket),
+    do: assign(socket, view_mode: :rendered)
+
+  defp dismiss_topmost_layer(%{assigns: %{show_versions: true}} = socket),
+    do: assign(socket, show_versions: false)
+
+  defp dismiss_topmost_layer(%{assigns: %{show_help: true}} = socket),
+    do: assign(socket, show_help: false)
+
+  defp dismiss_topmost_layer(%{assigns: %{content_highlight: h}} = socket) when not is_nil(h),
+    do: assign(socket, content_highlight: nil)
+
+  defp dismiss_topmost_layer(%{assigns: %{search_query: q}} = socket) when q != "",
+    do: assign(socket, search_query: "", search_results: [], content_highlight: nil)
+
+  defp dismiss_topmost_layer(socket), do: socket
+
   defp kb_current_index(socket) do
     if socket.assigns.search_query != "" do
       current_search_result_index(socket)
@@ -1041,6 +1247,16 @@ defmodule ClaudePlans.Web.BrowserLive do
 
   defp kb_apply_navigation(socket, list, new_idx) do
     case Enum.at(list, new_idx) do
+      nil -> {:noreply, socket}
+      item -> kb_select_item(socket, item)
+    end
+  end
+
+  defp kb_select_from_list(socket) do
+    list = visible_list(socket)
+    idx = kb_current_index(socket)
+
+    case Enum.at(list, idx || -1) do
       nil -> {:noreply, socket}
       item -> kb_select_item(socket, item)
     end
@@ -1085,6 +1301,9 @@ defmodule ClaudePlans.Web.BrowserLive do
           &(&1.rel_path == socket.assigns.selected_file)
         )
 
+      :activity ->
+        socket.assigns.selected_activity_index
+
       _ ->
         nil
     end
@@ -1110,7 +1329,13 @@ defmodule ClaudePlans.Web.BrowserLive do
 
       :activity ->
         idx = Enum.find_index(socket.assigns.activity_events, &(&1.id == item.id)) || 0
-        handle_event("select_activity_event", %{"index" => to_string(idx)}, socket)
+        diff_html = compute_activity_diff(item)
+
+        {:noreply,
+         assign(socket,
+           selected_activity_index: idx,
+           activity_diff_html: diff_html
+         )}
 
       _ ->
         {:noreply, socket}
@@ -1124,11 +1349,17 @@ defmodule ClaudePlans.Web.BrowserLive do
     case File.read(path) do
       {:ok, content} ->
         {:noreply,
-         assign(socket,
+         socket
+         |> assign(
            active_tab: :plans,
            selected: result.filename,
            html: RenderCache.render(content),
-           content_highlight: highlight
+           content_highlight: highlight,
+           view_mode: :rendered
+         )
+         |> push_patch(
+           to: build_url_params(socket, %{tab: :plans, plan: result.filename}),
+           replace: true
          )}
 
       {:error, _} ->
@@ -1151,11 +1382,16 @@ defmodule ClaudePlans.Web.BrowserLive do
     case File.read(full_path) do
       {:ok, content} ->
         {:noreply,
-         assign(socket,
+         socket
+         |> assign(
            active_tab: :projects,
            selected_file: rel,
            file_html: RenderCache.render(content),
            content_highlight: highlight
+         )
+         |> push_patch(
+           to: build_url_params(socket, %{tab: :projects, project: proj, file: rel}),
+           replace: true
          )}
 
       {:error, _} ->
@@ -1378,4 +1614,112 @@ defmodule ClaudePlans.Web.BrowserLive do
         |> String.replace("__LINE__", "1")
     end
   end
+
+  # --- URL param helpers ---
+
+  defp parse_tab("projects"), do: :projects
+  defp parse_tab("activity"), do: :activity
+  defp parse_tab(_), do: :plans
+
+  defp resolve_plan(nil, socket) do
+    case socket.assigns.plans do
+      [first | _] -> first.filename
+      [] -> nil
+    end
+  end
+
+  defp resolve_plan(filename, socket) do
+    if Enum.any?(socket.assigns.plans, &(&1.filename == filename)) do
+      filename
+    else
+      resolve_plan(nil, socket)
+    end
+  end
+
+  defp load_plan_state(socket, filename) do
+    path = Path.join(ClaudePlans.plans_dir(), filename)
+
+    case File.read(path) do
+      {:ok, content} ->
+        VersionStore.snapshot(filename)
+        VersionStore.mark_checked(filename)
+        versions = VersionStore.list_versions(filename)
+
+        plans = socket.assigns.plans
+        idx = Enum.find_index(plans, &(&1.filename == filename)) || 0
+        nearby_paths = Enum.map(plans, & &1.path)
+        RenderCache.prerender_nearby(nearby_paths, idx)
+
+        assign(socket,
+          selected: filename,
+          html: RenderCache.render(content),
+          content_highlight: nil,
+          versions: versions,
+          view_mode: :rendered,
+          diff_html: nil,
+          diff_version_a: nil,
+          diff_version_b: nil,
+          show_versions: false,
+          annotations: [],
+          annotation_counter: 0,
+          inspector_mode: false,
+          show_annotation_panel: false,
+          editing_annotation: nil,
+          has_file_annotations: has_file_annotations?(content),
+          unchecked_plan_files: VersionStore.unchecked_files()
+        )
+
+      {:error, _} ->
+        socket
+    end
+  end
+
+  defp load_file_state(socket, rel_path) do
+    full_path =
+      Path.join([socket.assigns.projects_dir, socket.assigns.selected_project, rel_path])
+
+    case File.read(full_path) do
+      {:ok, content} ->
+        project_files = socket.assigns.project_files
+        idx = Enum.find_index(project_files, &(&1.rel_path == rel_path)) || 0
+        base = Path.join(socket.assigns.projects_dir, socket.assigns.selected_project)
+        nearby_paths = Enum.map(project_files, &Path.join(base, &1.rel_path))
+        RenderCache.prerender_nearby(nearby_paths, idx)
+
+        assign(socket,
+          selected_file: rel_path,
+          file_html: RenderCache.render(content),
+          content_highlight: nil
+        )
+
+      {:error, _} ->
+        socket
+    end
+  end
+
+  defp build_url_params(socket, overrides) do
+    tab = Map.get(overrides, :tab, socket.assigns.active_tab)
+    plan = Map.get(overrides, :plan, socket.assigns.selected)
+    project = Map.get(overrides, :project, socket.assigns.selected_project)
+    file = Map.get(overrides, :file, socket.assigns.selected_file)
+    query = Map.get(overrides, :q, socket.assigns.search_query)
+    view = Map.get(overrides, :view, socket.assigns.view_mode)
+
+    params =
+      [
+        url_param("tab", tab != :plans, fn -> Atom.to_string(tab) end),
+        url_param("plan", not is_nil(plan), fn -> plan end),
+        url_param("project", tab == :projects and not is_nil(project), fn -> project end),
+        url_param("file", tab == :projects and not is_nil(file), fn -> file end),
+        url_param("q", query != "", fn -> query end),
+        url_param("view", view != :rendered, fn -> Atom.to_string(view) end)
+      ]
+      |> Enum.reject(&is_nil/1)
+      |> Map.new()
+
+    if params == %{}, do: "/", else: "/?" <> URI.encode_query(params)
+  end
+
+  defp url_param(key, true, value_fn), do: {key, value_fn.()}
+  defp url_param(_key, _false, _value_fn), do: nil
 end

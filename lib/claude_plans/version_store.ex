@@ -29,6 +29,21 @@ defmodule ClaudePlans.VersionStore do
     GenServer.cast(__MODULE__, {:snapshot, filename})
   end
 
+  @doc "Get the last-checked version id for a file, or nil."
+  def get_checked_version(filename) do
+    GenServer.call(__MODULE__, {:get_checked_version, filename})
+  end
+
+  @doc "Mark a file as checked at its latest version."
+  def mark_checked(filename) do
+    GenServer.cast(__MODULE__, {:mark_checked, filename})
+  end
+
+  @doc "Returns a MapSet of filenames with unchecked changes."
+  def unchecked_files do
+    GenServer.call(__MODULE__, :unchecked_files)
+  end
+
   # --- Server ---
 
   @impl true
@@ -36,13 +51,14 @@ defmodule ClaudePlans.VersionStore do
     {:ok, _} = Registry.register(ClaudePlans.Registry, :plan_updates, [])
 
     versions = load_all_history()
+    checked = load_checked_versions()
 
     # Snapshot all existing plans
     for plan <- ClaudePlans.Watcher.list_plans() do
       send(self(), {:snapshot_initial, plan.filename})
     end
 
-    {:ok, %{versions: versions}}
+    {:ok, %{versions: versions, checked_versions: checked}}
   end
 
   @impl true
@@ -80,9 +96,41 @@ defmodule ClaudePlans.VersionStore do
     {:reply, html, state}
   end
 
+  def handle_call({:get_checked_version, filename}, _from, state) do
+    {:reply, Map.get(state.checked_versions, filename), state}
+  end
+
+  def handle_call(:unchecked_files, _from, state) do
+    unchecked =
+      state.versions
+      |> Enum.reduce(MapSet.new(), fn {filename, [latest | _]}, acc ->
+        checked_id = Map.get(state.checked_versions, filename)
+
+        if checked_id != latest.id do
+          MapSet.put(acc, filename)
+        else
+          acc
+        end
+      end)
+
+    {:reply, unchecked, state}
+  end
+
   @impl true
   def handle_cast({:snapshot, filename}, state) do
     {:noreply, do_snapshot(state, filename)}
+  end
+
+  def handle_cast({:mark_checked, filename}, state) do
+    case Map.get(state.versions, filename, []) do
+      [latest | _] ->
+        checked = Map.put(state.checked_versions, filename, latest.id)
+        persist_checked_versions(checked)
+        {:noreply, %{state | checked_versions: checked}}
+
+      [] ->
+        {:noreply, state}
+    end
   end
 
   @impl true
@@ -210,6 +258,34 @@ defmodule ClaudePlans.VersionStore do
     case DateTime.from_iso8601(iso_str) do
       {:ok, dt, _offset} -> dt
       _ -> DateTime.utc_now()
+    end
+  end
+
+  defp checked_versions_path do
+    Path.join(history_dir(), ".checked_versions.json")
+  end
+
+  defp persist_checked_versions(checked) do
+    dir = history_dir()
+    File.mkdir_p!(dir)
+    File.write!(checked_versions_path(), Jason.encode!(checked))
+  rescue
+    e ->
+      Logger.warning("[VersionStore] Failed to persist checked versions: #{inspect(e)}")
+  end
+
+  defp load_checked_versions do
+    path = checked_versions_path()
+
+    case File.read(path) do
+      {:ok, json} ->
+        case Jason.decode(json) do
+          {:ok, map} when is_map(map) -> map
+          _ -> %{}
+        end
+
+      {:error, _} ->
+        %{}
     end
   end
 end

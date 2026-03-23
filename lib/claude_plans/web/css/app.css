@@ -313,8 +313,14 @@ kbd { display: inline-block; padding: 2px 6px; font-size: 0.6875rem; font-family
 .cb-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 16px; height: 16px; padding: 0 4px; font-size: 0.5625rem; font-weight: 600; color: #fff; background: #6366f1; border-radius: 9999px; margin-left: 4px; vertical-align: middle; line-height: 1; }
 
 /* Activity row */
-.cb-activity-row { display: flex; align-items: flex-start; gap: 0.5rem; padding: 0.5rem 0.75rem; border-radius: 0.5rem; cursor: pointer; transition: background 0.1s; margin-bottom: 1px; border: none; background: none; width: 100%; text-align: left; color: inherit; font-family: inherit; }
-.cb-activity-row:hover { background: #f1f5f9; }
+.cb-activity-row-wrap { display: flex; align-items: center; border-radius: 0.5rem; transition: background 0.1s; margin-bottom: 1px; position: relative; }
+.cb-activity-row-wrap:hover { background: #f1f5f9; }
+.cb-activity-row-wrap.cb-activity-row--active { background: #eef2ff; }
+.cb-activity-row-wrap.cb-activity-row--active:hover { background: #eef2ff; }
+.cb-activity-row { display: flex; align-items: flex-start; gap: 0.5rem; padding: 0.5rem 0.75rem; flex: 1; min-width: 0; cursor: pointer; border: none; background: none; text-align: left; color: inherit; font-family: inherit; }
+.cb-activity-goto { flex-shrink: 0; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; border: none; background: none; cursor: pointer; color: #94a3b8; font-size: 1rem; font-weight: 600; border-radius: 0.25rem; opacity: 0.4; transition: opacity 0.15s, color 0.15s; padding: 0; margin-right: 0.375rem; }
+.cb-activity-row-wrap:hover .cb-activity-goto { opacity: 1; }
+.cb-activity-goto:hover { color: #6366f1; background: rgba(99, 102, 241, 0.1); }
 
 
 /* Action icon (circular badge) */
@@ -333,7 +339,11 @@ kbd { display: inline-block; padding: 2px 6px; font-size: 0.6875rem; font-family
 
 /* Dark: activity feed */
 [data-theme="dark"] .cb-badge { background: #818cf8; }
-[data-theme="dark"] .cb-activity-row:hover { background: #1a1a1a; }
+[data-theme="dark"] .cb-activity-row-wrap:hover { background: #1a1a1a; }
+[data-theme="dark"] .cb-activity-row-wrap.cb-activity-row--active { background: rgba(99, 102, 241, 0.15); }
+[data-theme="dark"] .cb-activity-row-wrap.cb-activity-row--active:hover { background: rgba(99, 102, 241, 0.15); }
+[data-theme="dark"] .cb-activity-goto { color: #64748b; }
+[data-theme="dark"] .cb-activity-goto:hover { color: #818cf8; background: rgba(129, 140, 248, 0.15); }
 
 [data-theme="dark"] .cb-activity-icon--created { background: rgba(22,101,52,0.25); color: #86efac; }
 [data-theme="dark"] .cb-activity-icon--updated { background: rgba(30,64,175,0.25); color: #93c5fd; }
@@ -342,6 +352,10 @@ kbd { display: inline-block; padding: 2px 6px; font-size: 0.6875rem; font-family
 [data-theme="dark"] .cb-activity-category { color: #64748b; }
 [data-theme="dark"] .cb-activity-time { color: #64748b; }
 [data-theme="dark"] .cb-activity-project { color: #818cf8; }
+.cb-activity-unread { width: 6px; height: 6px; border-radius: 50%; background: #6366f1; flex-shrink: 0; margin-left: auto; }
+.cb-activity-row-wrap.cb-activity-row--unread { background: rgba(99, 102, 241, 0.04); }
+[data-theme="dark"] .cb-activity-unread { background: #818cf8; }
+[data-theme="dark"] .cb-activity-row-wrap.cb-activity-row--unread { background: rgba(129, 140, 248, 0.06); }
 
 /* ================================================
    Annotations & Inspector
