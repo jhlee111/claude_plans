@@ -92,7 +92,16 @@ defmodule ClaudePlans.Web.Layouts do
     destroyed() { if (this._interval) clearInterval(this._interval); }
   };
   function cleanText(el, max) {
-    const s = typeof el === "string" ? el : (el.innerText || el.textContent || "");
+    let s;
+    if (typeof el === "string") { s = el; }
+    else {
+      const label = el.querySelector ? el.querySelector("span.nodeLabel") : null;
+      if (label) {
+        s = label.innerText || label.textContent || "";
+      } else {
+        s = el.innerText || el.textContent || "";
+      }
+    }
     const t = s.replace(/\s+/g, " ").trim();
     return t.length > max ? t.substring(0, max) + "..." : t;
   }
@@ -113,6 +122,7 @@ defmodule ClaudePlans.Web.Layouts do
         const divs = this.el.querySelectorAll(".mermaid:not([data-processed])");
         if (divs.length > 0) {
           try { await mermaid.run({ nodes: Array.from(divs) }); } catch (e) { console.error("Mermaid:", e); }
+          divs.forEach(div => this.tagMermaidElements(div));
         }
       }
       this.highlightSearch();
@@ -219,13 +229,20 @@ defmodule ClaudePlans.Web.Layouts do
       self._inspectorTip = tip;
       function tipLabel(el, mermaidPart) {
         if (mermaidPart) {
-          if (mermaidPart.classList.contains("node")) return "node: " + cleanText(mermaidPart.textContent, 40);
-          if (mermaidPart.classList.contains("edgePath")) {
-            const id = mermaidPart.id || "";
-            const parts = id.replace(/^L-/, "").split("-");
-            return parts.length >= 2 ? "edge: " + parts[0] + " \u2192 " + parts[1] : "edge";
+          if (mermaidPart.classList.contains("node")) {
+            const nid = mermaidPart.getAttribute("data-mermaid-node") || "";
+            const label = mermaidPart.getAttribute("data-mermaid-label") || cleanText(mermaidPart, 35);
+            return (nid ? "node " + nid + ": " : "node: ") + label;
           }
-          if (mermaidPart.classList.contains("edgeLabel")) return "label: " + cleanText(mermaidPart.textContent, 30);
+          if (mermaidPart.classList.contains("edgePath")) {
+            const conn = mermaidPart.getAttribute("data-mermaid-edge");
+            return conn ? "edge: " + conn : "edge";
+          }
+          if (mermaidPart.classList.contains("edgeLabel")) {
+            const lbl = mermaidPart.getAttribute("data-mermaid-label") || cleanText(mermaidPart, 30);
+            const conn = mermaidPart.getAttribute("data-mermaid-edge");
+            return "label: " + lbl + (conn ? " (" + conn + ")" : "");
+          }
           if (mermaidPart.classList.contains("cluster")) return "group: " + cleanText(mermaidPart.textContent, 30);
         }
         if (!el) return "";
@@ -338,7 +355,12 @@ defmodule ClaudePlans.Web.Layouts do
         if (heading) break;
         node = node.parentElement;
       }
-      const headingText = heading ? heading.textContent.trim() : "(top)";
+      let headingText = "(top)";
+      if (heading) {
+        const clone = heading.cloneNode(true);
+        clone.querySelectorAll(".cb-annotation-badge").forEach(b => b.remove());
+        headingText = clone.textContent.trim();
+      }
       const headingPrefix = heading ? "#".repeat(parseInt(heading.tagName[1])) + " " : "";
       const tag = el.tagName.toLowerCase();
       let typeLabel;
@@ -404,20 +426,18 @@ defmodule ClaudePlans.Web.Layouts do
           const nodeEl = mermaidPart.classList.contains("node") ? mermaidPart : null;
           const cluster = mermaidPart.classList.contains("cluster") ? mermaidPart : null;
           if (edgePath) {
-            const edgeId = edgePath.id || "";
-            const parts = edgeId.replace(/^L-/, "").split("-");
-            if (parts.length >= 2) {
-              typeLabel = 'diagram edge "' + parts[0] + ' -> ' + parts[1] + '"';
-            } else {
-              typeLabel = "diagram edge";
-            }
+            const conn = edgePath.getAttribute("data-mermaid-edge");
+            typeLabel = conn ? 'diagram edge ' + conn : "diagram edge";
           } else if (edgeLabel) {
-            typeLabel = 'diagram label "' + cleanText(edgeLabel, 30) + '"';
+            const lbl = edgeLabel.getAttribute("data-mermaid-label") || cleanText(edgeLabel, 30);
+            const conn = edgeLabel.getAttribute("data-mermaid-edge");
+            typeLabel = 'diagram label "' + lbl + '"' + (conn ? " on " + conn : "");
           } else if (nodeEl) {
-            typeLabel = 'diagram node "' + cleanText(nodeEl, 40) + '"';
+            const nid = nodeEl.getAttribute("data-mermaid-node") || "";
+            const label = nodeEl.getAttribute("data-mermaid-label") || cleanText(nodeEl, 35);
+            typeLabel = nid ? 'diagram node ' + nid + ' "' + label + '"' : 'diagram node "' + label + '"';
           } else if (cluster) {
-            const clusterLabel = cluster.querySelector(".nodeLabel, text");
-            const label = clusterLabel ? clusterLabel.textContent.trim() : "";
+            const label = cleanText(cluster, 30);
             typeLabel = label ? 'diagram group "' + label + '"' : "diagram group";
           }
         }
@@ -452,6 +472,35 @@ defmodule ClaudePlans.Web.Layouts do
     },
     setupEdgeHitTargets() {
       // no-op: elementsFromPoint handles edge detection without hit targets
+    },
+    tagMermaidElements(container) {
+      container.querySelectorAll(".node[id]").forEach(node => {
+        const rawId = node.id || "";
+        const nodeId = rawId.replace(/^flowchart-/, "").replace(/-\d+$/, "");
+        if (nodeId) node.setAttribute("data-mermaid-node", nodeId);
+        const label = cleanText(node, 60);
+        if (label) node.setAttribute("data-mermaid-label", label);
+      });
+      const edges = Array.from(container.querySelectorAll(".edgePath[id]"));
+      const labels = Array.from(container.querySelectorAll(".edgeLabel"));
+      edges.forEach((edge, i) => {
+        const rawId = edge.id || "";
+        const parts = rawId.replace(/^L-/, "").split("-");
+        if (parts.length >= 2) {
+          edge.setAttribute("data-mermaid-from", parts[0]);
+          edge.setAttribute("data-mermaid-to", parts[1]);
+          edge.setAttribute("data-mermaid-edge", parts[0] + " -> " + parts[1]);
+        }
+        if (labels[i]) {
+          const labelText = cleanText(labels[i], 40);
+          labels[i].setAttribute("data-mermaid-label", labelText);
+          if (parts.length >= 2) {
+            labels[i].setAttribute("data-mermaid-from", parts[0]);
+            labels[i].setAttribute("data-mermaid-to", parts[1]);
+            labels[i].setAttribute("data-mermaid-edge", parts[0] + " -> " + parts[1]);
+          }
+        }
+      });
     }
   };
   Hooks.CopyAnnotations = {
