@@ -91,8 +91,8 @@ defmodule ClaudePlans.Web.Layouts do
     },
     destroyed() { if (this._interval) clearInterval(this._interval); }
   };
-  Hooks.Mermaid = {
-    mounted() { this.render(); },
+  Hooks.PlanContent = {
+    mounted() { this.render(); this.setupInspector(); },
     updated() { this.render(); },
     async render() {
       if (typeof mermaid !== 'undefined') {
@@ -111,6 +111,7 @@ defmodule ClaudePlans.Web.Layouts do
         }
       }
       this.highlightSearch();
+      this.applyAnnotationMarkers();
     },
     highlightSearch() {
       const wrap = this.el.closest(".cb-content-wrap");
@@ -192,6 +193,139 @@ defmodule ClaudePlans.Web.Layouts do
         const countEl = document.querySelector(".cb-match-nav-count");
         if (countEl) countEl.textContent = (idx + 1) + " / " + marks.length;
       };
+    },
+    setupInspector() {
+      if (this._inspectorBound) return;
+      const SELECTORS = "h1, h2, h3, h4, h5, h6, p, li, pre, blockquote, table tr, .mermaid";
+      const self = this;
+      this.el.addEventListener("mouseover", function(e) {
+        if (self.el.dataset.inspector !== "true") return;
+        const block = e.target.closest(SELECTORS);
+        if (block && self.el.contains(block)) {
+          block.classList.add("cb-inspector-highlight");
+        }
+      });
+      this.el.addEventListener("mouseout", function(e) {
+        const block = e.target.closest(SELECTORS);
+        if (block) block.classList.remove("cb-inspector-highlight");
+      });
+      this.el.addEventListener("click", function(e) {
+        if (self.el.dataset.inspector !== "true") return;
+        const block = e.target.closest(SELECTORS);
+        if (!block || !self.el.contains(block)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const blockIndex = self._getBlockIndex(block);
+        const blockPath = self._computeBlockPath(block);
+        self.pushEvent("add_annotation", { block_path: blockPath, block_index: blockIndex });
+      });
+      this._inspectorBound = true;
+    },
+    _getBlockIndex(el) {
+      const SELECTORS = "h1, h2, h3, h4, h5, h6, p, li, pre, blockquote, table tr, .mermaid";
+      const all = Array.from(this.el.querySelectorAll(SELECTORS));
+      return all.indexOf(el);
+    },
+    _computeBlockPath(el) {
+      let heading = null;
+      let node = el;
+      // Walk previous siblings and parent's previous siblings to find nearest heading
+      while (node && node !== this.el) {
+        let sib = node.previousElementSibling;
+        while (sib) {
+          if (/^H[1-6]$/.test(sib.tagName)) {
+            heading = sib;
+            break;
+          }
+          sib = sib.previousElementSibling;
+        }
+        if (heading) break;
+        node = node.parentElement;
+      }
+      const headingText = heading ? heading.textContent.trim() : "(top)";
+      const headingPrefix = heading ? "#".repeat(parseInt(heading.tagName[1])) + " " : "";
+      // Determine element type label and position
+      const tag = el.tagName.toLowerCase();
+      let typeLabel;
+      if (/^h[1-6]$/.test(tag)) {
+        return headingPrefix + headingText;
+      } else if (tag === "li") {
+        const list = el.parentElement;
+        const items = list ? Array.from(list.children).filter(c => c.tagName === "LI") : [el];
+        const pos = items.indexOf(el) + 1;
+        typeLabel = "bullet " + pos;
+      } else if (tag === "pre") {
+        typeLabel = "code block";
+      } else if (tag === "p") {
+        // Count paragraphs between this element and the heading
+        let count = 0;
+        let s = el;
+        while (s) {
+          if (s.tagName === "P") count++;
+          if (s === heading) break;
+          s = s.previousElementSibling;
+        }
+        typeLabel = count > 1 ? "paragraph " + count : "paragraph";
+      } else if (tag === "blockquote") {
+        typeLabel = "blockquote";
+      } else if (tag === "tr") {
+        const table = el.closest("table");
+        const rows = table ? Array.from(table.querySelectorAll("tr")) : [el];
+        const pos = rows.indexOf(el) + 1;
+        typeLabel = "table row " + pos;
+      } else if (el.classList.contains("mermaid")) {
+        typeLabel = "diagram";
+      } else {
+        typeLabel = tag;
+      }
+      return headingPrefix + headingText + " > " + typeLabel;
+    },
+    applyAnnotationMarkers() {
+      // Remove old markers
+      this.el.querySelectorAll(".cb-annotation-badge").forEach(b => b.remove());
+      this.el.querySelectorAll(".cb-annotated").forEach(b => b.classList.remove("cb-annotated"));
+      let annotatedIndices;
+      try { annotatedIndices = JSON.parse(this.el.dataset.annotations || "[]"); } catch(e) { return; }
+      if (!annotatedIndices.length) return;
+      const SELECTORS = "h1, h2, h3, h4, h5, h6, p, li, pre, blockquote, table tr, .mermaid";
+      const all = Array.from(this.el.querySelectorAll(SELECTORS));
+      // Get annotation IDs from the panel to match with indices
+      const panel = document.querySelector(".cb-annotation-panel");
+      const cards = panel ? Array.from(panel.querySelectorAll(".cb-annotation-card")) : [];
+      annotatedIndices.forEach((blockIdx, i) => {
+        const el = all[blockIdx];
+        if (!el) return;
+        el.classList.add("cb-annotated");
+        el.style.position = "relative";
+        const badge = document.createElement("span");
+        badge.className = "cb-annotation-badge";
+        const cardId = cards[i] ? cards[i].id.replace("ann-", "") : "A" + (i + 1);
+        badge.textContent = cardId;
+        el.appendChild(badge);
+      });
+    }
+  };
+  Hooks.CopyAnnotations = {
+    mounted() {
+      this.el.addEventListener("click", (e) => {
+        e.preventDefault();
+        const filename = this.el.dataset.filename || "plan.md";
+        let annotations;
+        try { annotations = JSON.parse(this.el.dataset.annotations || "[]"); } catch(e) { return; }
+        if (!annotations.length) return;
+        let lines = ["Plan annotations for: " + filename, ""];
+        for (const ann of annotations) {
+          const dir = (ann.direction || "").trim();
+          lines.push(ann.id + " (" + ann.block_path + "): " + (dir || "(no direction)"));
+        }
+        const text = lines.join("\n");
+        navigator.clipboard.writeText(text).then(() => {
+          const orig = this.el.textContent;
+          this.el.textContent = "Copied!";
+          this.el.classList.add("cb-copied");
+          setTimeout(() => { this.el.textContent = orig; this.el.classList.remove("cb-copied"); }, 1200);
+        });
+      });
     }
   };
   function scrollHighlightedIntoView() {
@@ -211,7 +345,7 @@ defmodule ClaudePlans.Web.Layouts do
             document.activeElement.blur();
             e.preventDefault();
           }
-          if (e.key === 'Enter') {
+          if (e.key === 'Enter' && tag === 'INPUT') {
             document.activeElement.blur();
             this.pushEvent("confirm_search", {});
             e.preventDefault();
@@ -310,6 +444,10 @@ defmodule ClaudePlans.Web.Layouts do
             break;
           case 'x':
             this.pushEvent("kb_delete", {});
+            e.preventDefault();
+            break;
+          case 'i':
+            this.pushEvent("toggle_inspector", {});
             e.preventDefault();
             break;
           case 'e':
