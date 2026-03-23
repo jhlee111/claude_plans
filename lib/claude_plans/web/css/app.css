@@ -383,8 +383,14 @@ kbd { display: inline-block; padding: 2px 6px; font-size: 0.6875rem; font-family
 /* Inspector mode */
 .cb-inspector-active { cursor: crosshair; }
 .cb-inspector-highlight { outline: 2px dashed #6366f1 !important; outline-offset: 2px; background: rgba(99, 102, 241, 0.06) !important; border-radius: 4px; cursor: crosshair !important; }
+.cb-mermaid-highlight { outline: 2px solid #6366f1 !important; outline-offset: 1px; cursor: crosshair !important; opacity: 0.85; }
+.cb-mermaid-highlight rect, .cb-mermaid-highlight polygon, .cb-mermaid-highlight circle, .cb-mermaid-highlight path { filter: brightness(0.85) saturate(1.3); }
+
+/* Make mermaid edges/labels hoverable in inspector mode */
+.cb-inspector-active .mermaid .edgeLabel { pointer-events: all !important; cursor: crosshair; }
 .cb-inspector-banner { display: flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.375rem 0.75rem; margin-bottom: 0.75rem; background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 0.5rem; font-size: 0.75rem; color: #4338ca; }
 .cb-inspector-banner kbd { font-size: 0.625rem; }
+.cb-inspector-tooltip { position: fixed; z-index: 9999; pointer-events: none; padding: 0.25rem 0.5rem; font-size: 0.6875rem; font-family: 'SF Mono', Monaco, monospace; color: #fff; background: rgba(30, 27, 75, 0.9); border-radius: 4px; white-space: nowrap; max-width: 300px; overflow: hidden; text-overflow: ellipsis; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
 
 /* Annotated block markers */
 .cb-annotated { border-left: 3px solid #6366f1 !important; padding-left: 12px; }
@@ -412,6 +418,8 @@ kbd { display: inline-block; padding: 2px 6px; font-size: 0.6875rem; font-family
 [data-theme="dark"] .cb-annotation-strip { color: #94a3b8; background: #1a1a1a; border-color: #333; }
 [data-theme="dark"] .cb-annotation-strip:hover { background: rgba(153,27,27,0.2); color: #f87171; border-color: #7f1d1d; }
 [data-theme="dark"] .cb-inspector-highlight { outline-color: #818cf8 !important; background: rgba(129, 140, 248, 0.08) !important; }
+[data-theme="dark"] .cb-mermaid-highlight { outline-color: #818cf8 !important; }
+[data-theme="dark"] .cb-mermaid-highlight rect, [data-theme="dark"] .cb-mermaid-highlight polygon, [data-theme="dark"] .cb-mermaid-highlight circle, [data-theme="dark"] .cb-mermaid-highlight path { filter: brightness(1.3) saturate(1.2); }
 [data-theme="dark"] .cb-inspector-banner { background: rgba(99, 102, 241, 0.15); border-color: rgba(99, 102, 241, 0.3); color: #a5b4fc; }
 [data-theme="dark"] .cb-annotation-badge { background: #818cf8; }
 [data-theme="dark"] .cb-annotated { border-left-color: #818cf8 !important; }

@@ -91,6 +91,11 @@ defmodule ClaudePlans.Web.Layouts do
     },
     destroyed() { if (this._interval) clearInterval(this._interval); }
   };
+  function cleanText(el, max) {
+    const s = typeof el === "string" ? el : (el.innerText || el.textContent || "");
+    const t = s.replace(/\s+/g, " ").trim();
+    return t.length > max ? t.substring(0, max) + "..." : t;
+  }
   Hooks.PlanContent = {
     mounted() { this.render(); this.setupInspector(); },
     updated() { this.render(); },
@@ -112,6 +117,7 @@ defmodule ClaudePlans.Web.Layouts do
       }
       this.highlightSearch();
       this.applyAnnotationMarkers();
+      this.setupEdgeHitTargets();
     },
     highlightSearch() {
       const wrap = this.el.closest(".cb-content-wrap");
@@ -198,27 +204,118 @@ defmodule ClaudePlans.Web.Layouts do
       if (this._inspectorBound) return;
       const SELECTORS = "h1, h2, h3, h4, h5, h6, p, li, pre, blockquote, table tr, .mermaid";
       const self = this;
+      function resolveBlock(target) {
+        let block = target.closest(SELECTORS);
+        if (block && block.closest(".mermaid") && !block.classList.contains("mermaid")) {
+          block = block.closest(".mermaid");
+        }
+        return block;
+      }
+      this._lastMermaidHighlight = null;
+      const tip = document.createElement("div");
+      tip.className = "cb-inspector-tooltip";
+      tip.style.display = "none";
+      document.body.appendChild(tip);
+      self._inspectorTip = tip;
+      function tipLabel(el, mermaidPart) {
+        if (mermaidPart) {
+          if (mermaidPart.classList.contains("node")) return "node: " + cleanText(mermaidPart.textContent, 40);
+          if (mermaidPart.classList.contains("edgePath")) {
+            const id = mermaidPart.id || "";
+            const parts = id.replace(/^L-/, "").split("-");
+            return parts.length >= 2 ? "edge: " + parts[0] + " \u2192 " + parts[1] : "edge";
+          }
+          if (mermaidPart.classList.contains("edgeLabel")) return "label: " + cleanText(mermaidPart.textContent, 30);
+          if (mermaidPart.classList.contains("cluster")) return "group: " + cleanText(mermaidPart.textContent, 30);
+        }
+        if (!el) return "";
+        const tag = el.tagName.toLowerCase();
+        if (/^h[1-6]$/.test(tag)) return "heading: " + cleanText(el.textContent, 40);
+        if (tag === "p") return "paragraph: " + cleanText(el.textContent, 40);
+        if (tag === "li") return "bullet: " + cleanText(el.textContent, 40);
+        if (tag === "pre") return "code block";
+        if (tag === "blockquote") return "blockquote: " + cleanText(el.textContent, 40);
+        if (tag === "tr") {
+          const cells = Array.from(el.querySelectorAll("td, th")).map(c => c.textContent.trim());
+          return "table row: " + cleanText(cells.join(" | "), 40);
+        }
+        if (el.classList.contains("mermaid")) return "diagram";
+        return tag;
+      }
+      function showTip(e, text) {
+        if (!text) { tip.style.display = "none"; return; }
+        tip.textContent = text;
+        tip.style.display = "block";
+        tip.style.left = (e.clientX + 12) + "px";
+        tip.style.top = (e.clientY - 8) + "px";
+      }
+      this.el.addEventListener("mousemove", function(e) {
+        if (self.el.dataset.inspector !== "true") { tip.style.display = "none"; return; }
+        const mermaidEl = e.target.closest(".mermaid");
+        if (mermaidEl && self.el.contains(mermaidEl)) {
+          const els = document.elementsFromPoint(e.clientX, e.clientY);
+          let found = null;
+          for (const el of els) {
+            const part = el.closest(".node, .edgePath, .edgeLabel, .cluster");
+            if (part && mermaidEl.contains(part)) { found = part; break; }
+          }
+          if (self._lastMermaidHighlight && self._lastMermaidHighlight !== found) {
+            self._lastMermaidHighlight.classList.remove("cb-mermaid-highlight");
+          }
+          if (found) {
+            found.classList.add("cb-mermaid-highlight");
+            self._lastMermaidHighlight = found;
+            mermaidEl.classList.remove("cb-inspector-highlight");
+            showTip(e, tipLabel(null, found));
+            return;
+          }
+          self._lastMermaidHighlight = null;
+          showTip(e, "diagram");
+          return;
+        }
+        const block = e.target.closest(SELECTORS);
+        if (block && self.el.contains(block)) {
+          showTip(e, tipLabel(block, null));
+        } else {
+          tip.style.display = "none";
+        }
+      });
       this.el.addEventListener("mouseover", function(e) {
         if (self.el.dataset.inspector !== "true") return;
-        const block = e.target.closest(SELECTORS);
+        const block = resolveBlock(e.target);
         if (block && self.el.contains(block)) {
           block.classList.add("cb-inspector-highlight");
         }
       });
       this.el.addEventListener("mouseout", function(e) {
-        const block = e.target.closest(SELECTORS);
+        if (self._lastMermaidHighlight) {
+          self._lastMermaidHighlight.classList.remove("cb-mermaid-highlight");
+          self._lastMermaidHighlight = null;
+        }
+        const block = resolveBlock(e.target);
         if (block) block.classList.remove("cb-inspector-highlight");
+        tip.style.display = "none";
       });
-      this.el.addEventListener("click", function(e) {
+      document.addEventListener("mousedown", function(e) {
         if (self.el.dataset.inspector !== "true") return;
-        const block = e.target.closest(SELECTORS);
+        const block = resolveBlock(e.target);
         if (!block || !self.el.contains(block)) return;
         e.preventDefault();
         e.stopPropagation();
+        e.stopImmediatePropagation();
+        let mermaidPart = null;
+        if (block.classList.contains("mermaid") && self._lastMermaidHighlight) {
+          mermaidPart = self._lastMermaidHighlight;
+        }
+        if (self._lastMermaidHighlight) {
+          self._lastMermaidHighlight.classList.remove("cb-mermaid-highlight");
+          self._lastMermaidHighlight = null;
+        }
+        tip.style.display = "none";
         const blockIndex = self._getBlockIndex(block);
-        const blockPath = self._computeBlockPath(block);
+        const blockPath = self._computeBlockPath(block, e, mermaidPart);
         self.pushEvent("add_annotation", { block_path: blockPath, block_index: blockIndex });
-      });
+      }, true);
       this._inspectorBound = true;
     },
     _getBlockIndex(el) {
@@ -226,10 +323,9 @@ defmodule ClaudePlans.Web.Layouts do
       const all = Array.from(this.el.querySelectorAll(SELECTORS));
       return all.indexOf(el);
     },
-    _computeBlockPath(el) {
+    _computeBlockPath(el, clickEvent, mermaidPart) {
       let heading = null;
       let node = el;
-      // Walk previous siblings and parent's previous siblings to find nearest heading
       while (node && node !== this.el) {
         let sib = node.previousElementSibling;
         while (sib) {
@@ -244,7 +340,6 @@ defmodule ClaudePlans.Web.Layouts do
       }
       const headingText = heading ? heading.textContent.trim() : "(top)";
       const headingPrefix = heading ? "#".repeat(parseInt(heading.tagName[1])) + " " : "";
-      // Determine element type label and position
       const tag = el.tagName.toLowerCase();
       let typeLabel;
       if (/^h[1-6]$/.test(tag)) {
@@ -256,8 +351,23 @@ defmodule ClaudePlans.Web.Layouts do
         typeLabel = "bullet " + pos;
       } else if (tag === "pre") {
         typeLabel = "code block";
+        if (clickEvent) {
+          const code = el.querySelector("code");
+          if (code) {
+            const text = code.textContent || "";
+            const lines = text.split("\n");
+            if (lines.length > 1) {
+              const rect = code.getBoundingClientRect();
+              const clickY = clickEvent.clientY - rect.top;
+              const lineHeight = rect.height / lines.length;
+              const lineNum = Math.min(Math.floor(clickY / lineHeight) + 1, lines.length);
+              const lineText = (lines[lineNum - 1] || "").trim();
+              const preview = lineText.length > 30 ? lineText.substring(0, 30) + "..." : lineText;
+              typeLabel = "code block line " + lineNum + (preview ? " `" + preview + "`" : "");
+            }
+          }
+        }
       } else if (tag === "p") {
-        // Count paragraphs between this element and the heading
         let count = 0;
         let s = el;
         while (s) {
@@ -271,10 +381,46 @@ defmodule ClaudePlans.Web.Layouts do
       } else if (tag === "tr") {
         const table = el.closest("table");
         const rows = table ? Array.from(table.querySelectorAll("tr")) : [el];
-        const pos = rows.indexOf(el) + 1;
-        typeLabel = "table row " + pos;
+        const rowPos = rows.indexOf(el) + 1;
+        if (clickEvent) {
+          const td = clickEvent.target.closest("td, th");
+          if (td) {
+            const cells = Array.from(el.children);
+            const colPos = cells.indexOf(td) + 1;
+            const cellText = td.textContent.trim();
+            const preview = cellText.length > 30 ? cellText.substring(0, 30) + "..." : cellText;
+            typeLabel = "table row " + rowPos + " col " + colPos + (preview ? ' "' + preview + '"' : "");
+          } else {
+            typeLabel = "table row " + rowPos;
+          }
+        } else {
+          typeLabel = "table row " + rowPos;
+        }
       } else if (el.classList.contains("mermaid")) {
         typeLabel = "diagram";
+        if (mermaidPart) {
+          const edgePath = mermaidPart.classList.contains("edgePath") ? mermaidPart : null;
+          const edgeLabel = mermaidPart.classList.contains("edgeLabel") ? mermaidPart : null;
+          const nodeEl = mermaidPart.classList.contains("node") ? mermaidPart : null;
+          const cluster = mermaidPart.classList.contains("cluster") ? mermaidPart : null;
+          if (edgePath) {
+            const edgeId = edgePath.id || "";
+            const parts = edgeId.replace(/^L-/, "").split("-");
+            if (parts.length >= 2) {
+              typeLabel = 'diagram edge "' + parts[0] + ' -> ' + parts[1] + '"';
+            } else {
+              typeLabel = "diagram edge";
+            }
+          } else if (edgeLabel) {
+            typeLabel = 'diagram label "' + cleanText(edgeLabel, 30) + '"';
+          } else if (nodeEl) {
+            typeLabel = 'diagram node "' + cleanText(nodeEl, 40) + '"';
+          } else if (cluster) {
+            const clusterLabel = cluster.querySelector(".nodeLabel, text");
+            const label = clusterLabel ? clusterLabel.textContent.trim() : "";
+            typeLabel = label ? 'diagram group "' + label + '"' : "diagram group";
+          }
+        }
       } else {
         typeLabel = tag;
       }
@@ -303,6 +449,9 @@ defmodule ClaudePlans.Web.Layouts do
         badge.textContent = cardId;
         el.appendChild(badge);
       });
+    },
+    setupEdgeHitTargets() {
+      // no-op: elementsFromPoint handles edge detection without hit targets
     }
   };
   Hooks.CopyAnnotations = {
