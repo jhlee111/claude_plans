@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-03-23
+
+### Added
+- Plan annotation system — inspector mode (`i` key or Annotate button) to select any rendered element and attach developer feedback
+- Block-level selection for paragraphs, headings, bullets, blockquotes, code blocks, table cells, and Mermaid diagram nodes/edges/labels
+- Code block line-level selection with line number and code preview in annotation reference
+- Mermaid diagram node/edge/label selection using `elementsFromPoint()` with post-render data tagging (`data-mermaid-*` attributes)
+- Inspector tooltip follows cursor showing element type and content preview
+- Annotation panel (right sidebar) with edit/display mode toggle and Save button
+- Copy All Annotations to clipboard in structured format for pasting into Claude Code terminal
+- Write to Plan File — appends annotations as HTML comment block at end of file, preserving content flow for LLM readability
+- Strip Annotations from File — removes annotation block after Claude Code processes feedback
+- Keyboard shortcut `i` to toggle annotation inspector
+
+### Changed
+- Renamed `Mermaid` JS hook to `PlanContent` — consolidates mermaid rendering, search highlighting, inspector, and annotation marker behaviors
+- Escape key cascade now includes inspector mode and annotation panel
+
 ## [0.6.1] - 2026-03-22
 
 ### Fixed
