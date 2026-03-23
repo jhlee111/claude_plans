@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-03-23
+
+### Added
+- Server-side mermaid rendering via MDExMermex plugin — no CDN or client-side JS required (PR #23 by @frankdugan3)
+- Semantic SVG output for mermaid diagrams — node, subgraph, and edge elements include `data-node-id`, `data-node-label`, `data-subgraph-label` attributes via forked mermaid-rs-renderer
+- SVG inline decoding (`inlineMermexSvgs`) to restore DOM-level annotation inspection for server-rendered diagrams
+- Diagram numbering for multiple mermaid diagrams under the same heading
+- Test suite — annotations, keyboard nav, projects, renderer, URL params, version store, browser_live
+
+### Changed
+- Extracted browser_live.ex into focused components: sidebar, content, annotation, and helpers modules
+- Extracted inline JS/CSS from layouts.ex into standalone `js/app.js` file
+- Extracted URL parameter logic into dedicated `UrlParams` module
+- Added `Debounce`, `KeyboardNav`, `Projects` modules for separation of concerns
+- Switched mermex dependency to forked version with semantic SVG attributes (`jhlee111/mermex`)
+
 ## [0.7.1] - 2026-03-23
 
 ### Added

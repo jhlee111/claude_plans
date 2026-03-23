@@ -78,7 +78,9 @@ defmodule ClaudePlans.Watcher do
   @impl true
   def handle_info({:file_event, _pid, {path, _events}}, state) do
     if String.ends_with?(path, ".md") do
-      timers = Debounce.debounce(state.debounce_timers, path, {:debounced_notify, path}, @debounce_ms)
+      timers =
+        Debounce.debounce(state.debounce_timers, path, {:debounced_notify, path}, @debounce_ms)
+
       {:noreply, %{state | debounce_timers: timers}}
     else
       {:noreply, state}

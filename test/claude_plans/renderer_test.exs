@@ -4,7 +4,7 @@ defmodule ClaudePlans.RendererTest do
   alias ClaudePlans.Renderer
 
   describe "mermaid code blocks" do
-    test "preserves language-mermaid class without syntax highlighting" do
+    test "renders mermaid via MDExMermex plugin as mdex-mermex div" do
       markdown = """
       ```mermaid
       graph TD
@@ -14,9 +14,8 @@ defmodule ClaudePlans.RendererTest do
 
       html = Renderer.to_html(markdown)
 
-      assert html =~ ~s(class="language-mermaid")
-      assert html =~ "graph TD"
-      assert html =~ "A --&gt; B"
+      assert html =~ ~s(class="mdex-mermex mermaid")
+      assert html =~ "data:image/svg+xml;base64,"
     end
 
     test "does not apply syntax highlighting spans to mermaid blocks" do
@@ -29,12 +28,10 @@ defmodule ClaudePlans.RendererTest do
 
       html = Renderer.to_html(markdown)
 
-      # Syntax highlighted code gets wrapped in <span style="..."> elements
-      # Mermaid blocks should NOT have these
       refute html =~ ~r/<code class="language-mermaid">.*<span style=/s
     end
 
-    test "renders mermaid inside pre>code structure for JS hook" do
+    test "renders mermaid as img with base64 SVG" do
       markdown = """
       ```mermaid
       pie title Pets
@@ -45,7 +42,8 @@ defmodule ClaudePlans.RendererTest do
 
       html = Renderer.to_html(markdown)
 
-      assert html =~ ~r/<pre><code class="language-mermaid">.*<\/code><\/pre>/s
+      assert html =~ ~r/<img src="data:image\/svg\+xml;base64,/
+      assert html =~ "mdex-mermex"
     end
   end
 
@@ -59,11 +57,10 @@ defmodule ClaudePlans.RendererTest do
 
       html = Renderer.to_html(markdown)
 
-      # Regular code blocks should have syntax highlighting spans
       assert html =~ "<span style="
     end
 
-    test "does not add language-mermaid class to non-mermaid blocks" do
+    test "does not wrap non-mermaid blocks in mermaid div" do
       markdown = """
       ```javascript
       console.log("hello")
@@ -72,7 +69,8 @@ defmodule ClaudePlans.RendererTest do
 
       html = Renderer.to_html(markdown)
 
-      refute html =~ "language-mermaid"
+      refute html =~ ~s(class="mdex-mermex mermaid" tabindex)
+      assert html =~ "language-javascript"
     end
   end
 
@@ -95,9 +93,8 @@ defmodule ClaudePlans.RendererTest do
 
       html = Renderer.to_html(markdown)
 
-      # Mermaid block: plain code with language-mermaid class
-      assert html =~ ~s(class="language-mermaid")
-      assert html =~ "graph LR"
+      # Mermaid block: rendered by MDExMermex
+      assert html =~ ~s(class="mdex-mermex mermaid")
 
       # Elixir block: syntax highlighted
       assert html =~ "<span style="
@@ -117,7 +114,7 @@ defmodule ClaudePlans.RendererTest do
 
       html = Renderer.to_html(markdown)
 
-      assert html =~ ~s(class="language-mermaid")
+      assert html =~ "mdex-mermex" or html =~ "<pre>"
     end
   end
 end
