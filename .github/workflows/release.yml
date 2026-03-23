@@ -51,11 +51,14 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-mix-prod-
 
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
       - name: Install dependencies
-        run: mix deps.get
+        run: MERMEX_BUILD=true mix deps.get
 
       - name: Build macOS ARM binary
-        run: BURRITO_TARGET=macos_arm mix release
+        run: MERMEX_BUILD=true BURRITO_TARGET=macos_arm mix release
 
       - name: Create Release
         if: steps.version.outputs.is_tag == 'true'
