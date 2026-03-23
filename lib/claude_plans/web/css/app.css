@@ -360,13 +360,13 @@ kbd { display: inline-block; padding: 2px 6px; font-size: 0.6875rem; font-family
 .cb-annotation-card { border: 1px solid #e2e8f0; border-radius: 0.5rem; padding: 0.625rem; margin-bottom: 0.5rem; background: #f8fafc; }
 .cb-annotation-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.375rem; }
 .cb-annotation-label { display: inline-flex; align-items: center; justify-content: center; padding: 0.125rem 0.5rem; font-size: 0.625rem; font-weight: 600; color: #fff; background: #6366f1; border-radius: 9999px; font-family: 'SF Mono', Monaco, monospace; }
-.cb-annotation-ref { font-size: 0.6875rem; color: #64748b; font-family: 'SF Mono', Monaco, monospace; margin-bottom: 0.375rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cb-annotation-ref { font-size: 0.6875rem; color: #64748b; font-family: 'SF Mono', Monaco, monospace; margin-bottom: 0.375rem; word-break: break-word; line-height: 1.4; }
 .cb-annotation-input { width: 100%; font-size: 0.75rem; padding: 0.375rem 0.5rem; border: 1px solid #e2e8f0; border-radius: 0.375rem; background: #fff; color: #334155; resize: vertical; font-family: inherit; min-height: 2.5rem; }
 .cb-annotation-input:focus { outline: none; border-color: #6366f1; }
 .cb-annotation-input::placeholder { color: #94a3b8; }
 .cb-annotation-remove { border: none; background: none; cursor: pointer; color: #94a3b8; font-size: 1.125rem; line-height: 1; padding: 0; }
 .cb-annotation-remove:hover { color: #dc2626; }
-.cb-annotation-display { font-size: 0.75rem; color: #334155; padding: 0.375rem 0.5rem; border: 1px solid transparent; border-radius: 0.375rem; cursor: pointer; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+.cb-annotation-display { font-size: 0.75rem; color: #334155; padding: 0.25rem 0; border: 1px solid transparent; border-radius: 0.375rem; cursor: pointer; line-height: 1.5; white-space: normal; word-break: break-word; }
 .cb-annotation-display:hover { background: #f1f5f9; border-color: #e2e8f0; }
 .cb-annotation-display--empty { color: #94a3b8; font-style: italic; }
 .cb-annotation-save { width: 100%; padding: 0.3rem; font-size: 0.6875rem; font-weight: 500; color: #4338ca; background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 0.375rem; cursor: pointer; margin-top: 0.375rem; transition: background 0.15s; }
