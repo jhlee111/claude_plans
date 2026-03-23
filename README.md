@@ -21,7 +21,8 @@ Browse `~/.claude/plans/` and `~/.claude/projects/*/memory/` in a clean, searcha
 - **Full-text search** — Search across all plan and project files with instant results and in-document match highlighting
 - **Open in editor** — Click "Edit" or press `e` to open the selected file in your editor via `PLUG_EDITOR`
 - **Delete files** — Remove plan or project files with `x` or the delete button (with confirmation)
-- **Keyboard navigation** — Vim-style keys: j/k to navigate, / to search, n/N to jump between matches, d to toggle diff, v to toggle version history, e to edit, x to delete, 1/2/3 to switch tabs, ? for help overlay
+- **Plan annotations** — Inspector mode (`i` key) to select any element — paragraphs, bullets, code block lines, table cells, Mermaid diagram nodes/edges — and attach feedback directions. Copy annotations to clipboard for pasting into Claude Code, or write them directly to the plan file as an end-of-file comment block
+- **Keyboard navigation** — Vim-style keys: j/k to navigate, / to search, n/N to jump between matches, d to toggle diff, v to toggle version history, i to annotate, e to edit, x to delete, 1/2/3 to switch tabs, ? for help overlay
 - **Live file watching** — Plans auto-reload when files change on disk
 - **Copy path** — Hover any file to copy its absolute path to clipboard
 - **Self-contained** — No Tailwind, no Node.js, no asset pipeline. CSS and JS embedded at compile time

@@ -50,7 +50,13 @@ defmodule ClaudePlans.Web.BrowserLive do
        show_versions: false,
        font_size: 16,
        activity_events: ActivityFeed.list_events(),
-       unseen_activity_count: 0
+       unseen_activity_count: 0,
+       inspector_mode: false,
+       annotations: [],
+       annotation_counter: 0,
+       editing_annotation: nil,
+       show_annotation_panel: false,
+       has_file_annotations: false
      )}
   end
 
@@ -105,7 +111,13 @@ defmodule ClaudePlans.Web.BrowserLive do
            diff_html: nil,
            diff_version_a: nil,
            diff_version_b: nil,
-           show_versions: false
+           show_versions: false,
+           annotations: [],
+           annotation_counter: 0,
+           inspector_mode: false,
+           show_annotation_panel: false,
+           editing_annotation: nil,
+           has_file_annotations: has_file_annotations?(content)
          )}
 
       {:error, _} ->
@@ -305,6 +317,12 @@ defmodule ClaudePlans.Web.BrowserLive do
   def handle_event("kb_escape", _params, socket) do
     socket =
       cond do
+        socket.assigns.inspector_mode ->
+          assign(socket, inspector_mode: false)
+
+        socket.assigns.show_annotation_panel ->
+          assign(socket, show_annotation_panel: false)
+
         socket.assigns.view_mode == :diff ->
           assign(socket, view_mode: :rendered)
 
@@ -457,6 +475,104 @@ defmodule ClaudePlans.Web.BrowserLive do
     {:noreply, socket}
   end
 
+  # --- Annotations ---
+
+  def handle_event("toggle_inspector", _params, socket) do
+    showing = !socket.assigns.show_annotation_panel
+
+    {:noreply,
+     assign(socket,
+       show_annotation_panel: showing,
+       inspector_mode: showing
+     )}
+  end
+
+  def handle_event(
+        "add_annotation",
+        %{"block_path" => block_path, "block_index" => block_index},
+        socket
+      ) do
+    counter = socket.assigns.annotation_counter + 1
+    id = "A#{counter}"
+
+    annotation = %{
+      id: id,
+      block_path: block_path,
+      block_index: block_index,
+      direction: ""
+    }
+
+    {:noreply,
+     assign(socket,
+       annotations: socket.assigns.annotations ++ [annotation],
+       annotation_counter: counter,
+       editing_annotation: id
+     )}
+  end
+
+  def handle_event("update_annotation", %{"id" => id, "direction" => direction}, socket) do
+    annotations =
+      Enum.map(socket.assigns.annotations, fn ann ->
+        if ann.id == id, do: %{ann | direction: direction}, else: ann
+      end)
+
+    {:noreply, assign(socket, annotations: annotations)}
+  end
+
+  def handle_event("save_annotation", %{"id" => id}, socket) do
+    # Direction is already saved via phx-change; this just exits edit mode
+    _ = id
+    {:noreply, assign(socket, editing_annotation: nil)}
+  end
+
+  def handle_event("edit_annotation", %{"id" => id}, socket) do
+    {:noreply, assign(socket, editing_annotation: id)}
+  end
+
+  def handle_event("remove_annotation", %{"id" => id}, socket) do
+    annotations = Enum.reject(socket.assigns.annotations, &(&1.id == id))
+    {:noreply, assign(socket, annotations: annotations, editing_annotation: nil)}
+  end
+
+  def handle_event("clear_annotations", _params, socket) do
+    {:noreply,
+     assign(socket,
+       annotations: [],
+       annotation_counter: 0,
+       inspector_mode: false,
+       editing_annotation: nil
+     )}
+  end
+
+  def handle_event("write_annotations_to_file", _params, socket) do
+    path = Path.join(ClaudePlans.plans_dir(), socket.assigns.selected)
+    annotations = socket.assigns.annotations
+
+    case File.read(path) do
+      {:ok, content} ->
+        updated = inject_annotations(content, annotations)
+        File.write!(path, updated)
+        {:noreply, push_event(socket, "write_feedback", %{status: "ok"})}
+
+      {:error, _} ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("strip_annotations_from_file", _params, socket) do
+    path = Path.join(ClaudePlans.plans_dir(), socket.assigns.selected)
+
+    case File.read(path) do
+      {:ok, content} ->
+        cleaned = strip_annotations(content)
+        File.write!(path, cleaned <> "\n")
+        {:noreply, socket}
+
+      {:error, _} ->
+        {:noreply, socket}
+    end
+  end
+
   # --- PubSub ---
 
   @impl true
@@ -482,7 +598,25 @@ defmodule ClaudePlans.Web.BrowserLive do
         end
       end
 
-    socket = assign(socket, plans: plans, selected: selected, html: html)
+    has_annotations =
+      if selected do
+        path = Path.join(ClaudePlans.plans_dir(), selected)
+
+        case File.read(path) do
+          {:ok, content} -> has_file_annotations?(content)
+          _ -> false
+        end
+      else
+        false
+      end
+
+    socket =
+      assign(socket,
+        plans: plans,
+        selected: selected,
+        html: html,
+        has_file_annotations: has_annotations
+      )
 
     # Refresh versions for selected plan
     socket =
@@ -575,6 +709,59 @@ defmodule ClaudePlans.Web.BrowserLive do
       <div class="cb-main">
         {main_content(assigns)}
       </div>
+      <div :if={@active_tab == :plans && @show_annotation_panel} class="cb-annotation-panel">
+        <div class="cb-annotation-header">
+          <span class="cb-section-label">Annotations</span>
+          <span :if={@annotations != []} class="cb-count">({length(@annotations)})</span>
+          <button :if={@annotations != []} phx-click="clear_annotations" class="cb-annotation-clear">Clear all</button>
+        </div>
+        <div class="cb-annotation-body">
+          <div :if={@annotations == []} class="cb-annotation-empty">
+            Click any block in the plan to annotate it
+          </div>
+          <div :for={ann <- @annotations} class="cb-annotation-card" id={"ann-#{ann.id}"}>
+            <div class="cb-annotation-card-header">
+              <span class="cb-annotation-label">{ann.id}</span>
+              <button phx-click="remove_annotation" phx-value-id={ann.id} class="cb-annotation-remove" title="Remove">&times;</button>
+            </div>
+            <div class="cb-annotation-ref">{ann.block_path}</div>
+            <%= if @editing_annotation == ann.id do %>
+              <form phx-change="update_annotation" phx-value-id={ann.id}>
+                <textarea
+                  id={"ann-input-#{ann.id}"}
+                  name="direction"
+                  class="cb-annotation-input"
+                  placeholder="What should change?"
+                  rows="2"
+                  phx-debounce="300"
+                >{ann.direction}</textarea>
+              </form>
+              <button phx-click="save_annotation" phx-value-id={ann.id} class="cb-annotation-save">Save</button>
+            <% else %>
+              <div
+                phx-click="edit_annotation"
+                phx-value-id={ann.id}
+                class={"cb-annotation-display#{if ann.direction == "", do: " cb-annotation-display--empty", else: ""}"}
+              >
+                {if ann.direction == "", do: "Click to add direction...", else: ann.direction}
+              </div>
+            <% end %>
+          </div>
+        </div>
+        <div :if={@annotations != []} class="cb-annotation-footer">
+          <button id="copy-annotations" class="cb-annotation-copy" phx-hook="CopyAnnotations" data-filename={@selected} data-annotations={Jason.encode!(@annotations)}>
+            Copy All Annotations
+          </button>
+          <button id="write-annotations" class="cb-annotation-write" phx-hook="WriteAnnotations" phx-click="write_annotations_to_file">
+            Write to Plan File
+          </button>
+        </div>
+        <div :if={@annotations == [] && @has_file_annotations} class="cb-annotation-footer">
+          <button phx-click="strip_annotations_from_file" class="cb-annotation-strip">
+            Strip Annotations from File
+          </button>
+        </div>
+      </div>
       <div :if={@show_help} class="cb-help-overlay" phx-click="kb_help">
         <div class="cb-help-modal" phx-click="noop">
           <div class="cb-help-title">Keyboard Shortcuts</div>
@@ -589,6 +776,7 @@ defmodule ClaudePlans.Web.BrowserLive do
             <dt><kbd>Ctrl+d</kbd> <kbd>Ctrl+u</kbd></dt><dd>Scroll content down / up</dd>
             <dt><kbd>d</kbd></dt><dd>Toggle diff view</dd>
             <dt><kbd>v</kbd></dt><dd>Toggle version history</dd>
+            <dt><kbd>i</kbd></dt><dd>Toggle annotation inspector</dd>
             <dt><kbd>e</kbd></dt><dd>Open in editor (PLUG_EDITOR)</dd>
             <dt><kbd>x</kbd></dt><dd>Delete selected file</dd>
             <dt><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></dt><dd>Plans / Projects / Activity tab</dd>
@@ -783,6 +971,13 @@ defmodule ClaudePlans.Web.BrowserLive do
           >
             History ({length(@versions)})
           </button>
+          <button
+            :if={@view_mode == :rendered}
+            phx-click="toggle_inspector"
+            class={"cb-action-btn#{if @show_annotation_panel, do: " cb-action-btn--active", else: ""}"}
+          >
+            Annotate
+          </button>
         </div>
       </div>
       <div :if={@show_versions} class="cb-version-panel">
@@ -820,7 +1015,10 @@ defmodule ClaudePlans.Web.BrowserLive do
       <div :if={@view_mode == :diff && @diff_html} class="cb-diff-view">
         {Phoenix.HTML.raw(@diff_html)}
       </div>
-      <div :if={@view_mode == :rendered} id="plan-content" class="cp-content" phx-hook="Mermaid" phx-update="replace" data-highlight={@content_highlight} style={"font-size: #{@font_size}px"}>
+      <div :if={@view_mode == :rendered && @inspector_mode} class="cb-inspector-banner">
+        Click any block to annotate &middot; Press <kbd>i</kbd> or <kbd>Esc</kbd> to exit
+      </div>
+      <div :if={@view_mode == :rendered} id="plan-content" class={"cp-content#{if @inspector_mode, do: " cb-inspector-active", else: ""}"} phx-hook="PlanContent" phx-update="replace" data-highlight={@content_highlight} data-inspector={to_string(@inspector_mode)} data-annotations={Jason.encode!(Enum.map(@annotations, & &1.block_index))} style={"font-size: #{@font_size}px"}>
         {Phoenix.HTML.raw(@html)}
       </div>
     </div>
@@ -837,7 +1035,7 @@ defmodule ClaudePlans.Web.BrowserLive do
     ~H"""
     <div :if={@file_html} class="cb-content-wrap">
       <div class="cb-file-header">{@selected_file}</div>
-      <div id="project-file-content" class="cp-content" phx-hook="Mermaid" phx-update="replace" data-highlight={@content_highlight} style={"font-size: #{@font_size}px"}>
+      <div id="project-file-content" class="cp-content" phx-hook="PlanContent" phx-update="replace" data-highlight={@content_highlight} style={"font-size: #{@font_size}px"}>
         {Phoenix.HTML.raw(@file_html)}
       </div>
     </div>
@@ -851,6 +1049,36 @@ defmodule ClaudePlans.Web.BrowserLive do
   end
 
   # --- Helpers ---
+
+  @annotation_separator "\n---\n<!-- Annotations by developer -->\n"
+
+  defp inject_annotations(content, annotations) do
+    clean = strip_annotations(content)
+
+    lines =
+      Enum.map(annotations, fn ann ->
+        direction = String.trim(ann.direction)
+
+        if direction == "" do
+          "<!-- #{ann.id} (#{ann.block_path}) -->"
+        else
+          "<!-- #{ann.id} (#{ann.block_path}): #{direction} -->"
+        end
+      end)
+
+    clean <> @annotation_separator <> Enum.join(lines, "\n") <> "\n"
+  end
+
+  defp strip_annotations(content) do
+    case String.split(content, "\n---\n<!-- Annotations by developer -->\n", parts: 2) do
+      [clean, _rest] -> String.trim_trailing(clean)
+      [_content] -> String.trim_trailing(content)
+    end
+  end
+
+  defp has_file_annotations?(content) do
+    String.contains?(content, "<!-- Annotations by developer -->")
+  end
 
   defp navigate_search_result(socket, direction) do
     results = socket.assigns.search_results
