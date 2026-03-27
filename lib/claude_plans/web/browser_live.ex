@@ -500,7 +500,6 @@ defmodule ClaudePlans.Web.BrowserLive do
      assign(socket,
        annotations: [],
        annotation_counter: 0,
-       inspector_mode: false,
        editing_annotation: nil
      )}
   end
