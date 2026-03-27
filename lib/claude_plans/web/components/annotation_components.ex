@@ -76,7 +76,7 @@ defmodule ClaudePlans.Web.Components.AnnotationComponents do
           <dt><kbd>Ctrl+d</kbd> <kbd>Ctrl+u</kbd></dt><dd>Scroll content down / up</dd>
           <dt><kbd>d</kbd></dt><dd>Toggle diff view</dd>
           <dt><kbd>v</kbd></dt><dd>Toggle version history</dd>
-          <dt><kbd>i</kbd></dt><dd>Toggle annotation inspector</dd>
+          <dt><kbd>a</kbd></dt><dd>Toggle annotation inspector</dd>
           <dt><kbd>e</kbd></dt><dd>Open in editor (PLUG_EDITOR)</dd>
           <dt><kbd>x</kbd></dt><dd>Delete selected file</dd>
           <dt><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></dt><dd>Plans / Projects / Activity tab</dd>
