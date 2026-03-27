@@ -82,6 +82,7 @@ All configuration is done via environment variables:
 | `PLANS_DIR` | `~/.claude/plans` | Directory containing Claude Code plan files |
 | `PROJECTS_DIR` | `~/.claude/projects` | Directory containing Claude Code project directories |
 | `PLUG_EDITOR` | (unset) | Editor URL template for "Edit" button (e.g., `vscode://file/__FILE__:__LINE__`) |
+| `LOG_LEVEL` | `info` | Log level (`debug`, `info`, `warning`, `error`) |
 
 ### Examples
 
