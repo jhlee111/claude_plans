@@ -1,9 +1,12 @@
 defmodule ClaudePlans.Application do
   @moduledoc false
   use Application
+  require Logger
 
   @impl true
   def start(_type, _args) do
+    configure_logger()
+
     children = [
       {Phoenix.PubSub, name: ClaudePlans.PubSub},
       {Registry, keys: :duplicate, name: ClaudePlans.Registry},
@@ -25,6 +28,13 @@ defmodule ClaudePlans.Application do
     end
 
     {:ok, pid}
+  end
+
+  defp configure_logger do
+    case System.get_env("LOG_LEVEL") do
+      nil -> :ok
+      level -> Logger.configure(level: String.to_atom(level))
+    end
   end
 
   defp open_browser(url) do

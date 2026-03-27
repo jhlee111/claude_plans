@@ -10,6 +10,14 @@ if config_env() == :prod do
 
   config :claude_plans,
     open_browser: System.get_env("NO_BROWSER") != "1"
+
+  log_level =
+    case System.get_env("LOG_LEVEL") do
+      nil -> :info
+      level -> String.to_existing_atom(level)
+    end
+
+  config :logger, level: log_level
 end
 
 config :claude_plans,
