@@ -38,14 +38,21 @@ defmodule ClaudePlans.Application do
   end
 
   defp open_browser(url) do
-    case :os.type() do
-      {:unix, :darwin} -> System.cmd("open", [url])
-      {:unix, _} -> System.cmd("xdg-open", [url])
-      _ -> :ok
+    {cmd, args} =
+      case :os.type() do
+        {:unix, :darwin} -> {"open", [url]}
+        {:unix, _} -> {"xdg-open", [url]}
+        _ -> {nil, []}
+      end
+
+    if cmd do
+      case System.cmd(cmd, args, stderr_to_stdout: true) do
+        {_, 0} -> :ok
+        {output, _} -> Logger.warning("[ClaudePlans] Failed to open browser: #{output}")
+      end
     end
   rescue
-    e in [ErlangError, File.Error] ->
-      require Logger
+    e ->
       Logger.warning("[ClaudePlans] Failed to open browser: #{inspect(e)}")
       :ok
   end
