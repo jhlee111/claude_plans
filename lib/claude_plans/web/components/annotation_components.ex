@@ -82,6 +82,7 @@ defmodule ClaudePlans.Web.Components.AnnotationComponents do
           <dt><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></dt><dd>Plans / Projects / Activity tab</dd>
           <dt><kbd>?</kbd></dt><dd>Toggle this help</dd>
         </dl>
+        <div class="cb-help-version">v{Application.spec(:claude_plans, :vsn)}</div>
       </div>
     </div>
     """
