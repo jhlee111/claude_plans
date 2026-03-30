@@ -48,6 +48,12 @@ defmodule ClaudePlans.VersionStore do
     GenServer.cast(__MODULE__, {:snapshot, filename})
   end
 
+  @doc "Snapshot an arbitrary file under a given version key."
+  @spec snapshot_file(String.t(), String.t()) :: :ok
+  def snapshot_file(version_key, file_path) do
+    GenServer.cast(__MODULE__, {:snapshot_file, version_key, file_path})
+  end
+
   @doc "Get the last-checked version id for a file, or nil."
   @spec get_checked_version(String.t()) :: String.t() | nil
   def get_checked_version(filename) do
@@ -165,7 +171,8 @@ defmodule ClaudePlans.VersionStore do
 
   def handle_call({:diff_since_checked, filename}, _from, state) do
     # Snapshot first (in-process, no extra GenServer call)
-    state = do_snapshot(state, filename)
+    path = Path.join(ClaudePlans.plans_dir(), filename)
+    state = do_snapshot(state, filename, path)
     versions = Map.get(state.versions, filename, [])
     checked_id = Map.get(state.checked_versions, filename)
 
@@ -214,7 +221,12 @@ defmodule ClaudePlans.VersionStore do
 
   @impl true
   def handle_cast({:snapshot, filename}, state) do
-    {:noreply, do_snapshot(state, filename)}
+    path = Path.join(ClaudePlans.plans_dir(), filename)
+    {:noreply, do_snapshot(state, filename, path)}
+  end
+
+  def handle_cast({:snapshot_file, key, path}, state) do
+    {:noreply, do_snapshot(state, key, path)}
   end
 
   def handle_cast({:mark_checked, filename}, state) do
@@ -231,12 +243,14 @@ defmodule ClaudePlans.VersionStore do
 
   @impl true
   def handle_info({:plan_updated, filename}, state) do
-    {:noreply, do_snapshot(state, filename)}
+    path = Path.join(ClaudePlans.plans_dir(), filename)
+    {:noreply, do_snapshot(state, filename, path)}
   end
 
   @impl true
   def handle_info({:snapshot_initial, filename}, state) do
-    {:noreply, do_snapshot(state, filename)}
+    path = Path.join(ClaudePlans.plans_dir(), filename)
+    {:noreply, do_snapshot(state, filename, path)}
   end
 
   # --- Internal ---
@@ -251,13 +265,11 @@ defmodule ClaudePlans.VersionStore do
     end
   end
 
-  defp do_snapshot(state, filename) do
-    path = Path.join(ClaudePlans.plans_dir(), filename)
-
+  defp do_snapshot(state, key, path) do
     case File.read(path) do
       {:ok, content} ->
         hash = :crypto.hash(:sha256, content)
-        existing = Map.get(state.versions, filename, [])
+        existing = Map.get(state.versions, key, [])
 
         if existing != [] && hd(existing).hash == hash do
           state
@@ -273,8 +285,8 @@ defmodule ClaudePlans.VersionStore do
           }
 
           updated = [entry | existing] |> Enum.take(@max_versions)
-          new_versions = Map.put(state.versions, filename, updated)
-          persist_history(filename, updated)
+          new_versions = Map.put(state.versions, key, updated)
+          persist_history(key, updated)
           %{state | versions: new_versions}
         end
 

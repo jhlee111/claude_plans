@@ -97,6 +97,7 @@ defmodule ClaudePlans.Web.Components.SidebarComponents do
       <div :for={file <- @project_files} class="cb-file-row">
         <button
           phx-click="select_file"
+          phx-target="#projects-viewer"
           phx-value-path={file.rel_path}
           class={"cb-file-btn#{if @selected_file == file.rel_path, do: " cb-file-btn--active", else: ""}"}
         >
@@ -131,6 +132,203 @@ defmodule ClaudePlans.Web.Components.SidebarComponents do
     </div>
     """
   end
+
+  def folders_sidebar(assigns) do
+    ~H"""
+    <%!-- Folder selector: dropdown + inline action icons, aligned to match cb-select height --%>
+    <div style="display:flex;align-items:center;gap:0.25rem;margin-bottom:0.75rem">
+      <form phx-change="select_custom_folder" style="flex:1;min-width:0">
+        <select name="folder" class="cb-select" style="margin-bottom:0">
+          <option :if={is_nil(@selected_custom_folder)} value="">Select folder...</option>
+          <option
+            :for={f <- @custom_folders}
+            value={f.id}
+            selected={@selected_custom_folder == f.id}
+          >
+            {f.name}
+          </option>
+        </select>
+      </form>
+      <button phx-click="show_add_folder" class="cb-action-btn" title="Add folder" style="padding:0.3rem">
+        <.icon_folder_plus size={14} />
+      </button>
+      <button
+        :if={@selected_custom_folder}
+        phx-click="remove_folder"
+        data-confirm="Remove this folder from the list?"
+        class="cb-action-btn cb-action-btn--danger"
+        title="Remove folder"
+        style="padding:0.3rem"
+      >
+        <.icon_x size={12} />
+      </button>
+    </div>
+    <%!-- Folder browser --%>
+    <div :if={@adding_folder} style="margin-top:0.5rem">
+      <div style="display:flex;align-items:center;gap:0.25rem;margin-bottom:0.375rem">
+        <button phx-click="browse_up" class="cb-action-btn" title="Go up" style="padding:0.2rem 0.4rem;font-size:0.7rem">
+          ..
+        </button>
+        <span class="cb-browse-path" style="flex:1;min-width:0" title={@browse_path}>
+          {@browse_path}
+        </span>
+        <button phx-click="refresh_dir_index" class="cb-action-btn" title="Refresh index" style="padding:0.2rem">
+          <.icon_refresh size={11} />
+        </button>
+      </div>
+      <form phx-change="browse_filter" style="margin-bottom:0.375rem">
+        <input
+          name="filter"
+          value={@browse_filter}
+          placeholder="Filter folders..."
+          autocomplete="off"
+          phx-debounce="150"
+          class="cb-search-input"
+          style="font-size:0.7rem;padding:0.25rem 0.5rem"
+        />
+      </form>
+      <div class="cb-browse-list">
+        <div :if={@browse_dirs == []} style="padding:0.5rem;font-size:0.7rem;color:#94a3b8;text-align:center">
+          No subdirectories
+        </div>
+        <button
+          :for={entry <- @browse_dirs}
+          phx-click="browse_into"
+          phx-value-path={browse_entry_path(entry)}
+          class="cb-browse-item"
+        >
+          <span style="opacity:0.5">📁</span>
+          <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">{highlight_match(entry)}</span>
+          <span :if={browse_md_badge(entry)} style="font-size:0.55rem;color:#2563eb;background:#dbeafe;border-radius:0.25rem;padding:0 0.2rem;flex-shrink:0;white-space:nowrap">
+            {browse_md_badge(entry)}
+          </span>
+        </button>
+      </div>
+      <div :if={@folder_path_error} style="color:#ef4444;font-size:0.65rem;margin-top:0.25rem">
+        {@folder_path_error}
+      </div>
+      <div style="display:flex;gap:0.375rem;margin-top:0.375rem">
+        <button phx-click="browse_select" class="cb-action-btn" style="flex:1">
+          Select this folder
+        </button>
+        <button phx-click="cancel_add_folder" class="cb-action-btn">
+          Cancel
+        </button>
+      </div>
+    </div>
+    <div :if={@selected_custom_folder && @folder_files != []}>
+      <%
+        folder_path = folder_path_for(@custom_folders, @selected_custom_folder)
+        dirs = Enum.filter(@folder_files, & &1.type == :dir)
+        files = Enum.filter(@folder_files, & &1.type == :file)
+        file_editor_urls = Map.new(files, fn f -> {f.rel_path, editor_url(f.full_path)} end)
+      %>
+      <%!-- Subdirectories --%>
+      <div :if={dirs != []} style="margin-bottom:0.5rem">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin:0.5rem 0">
+          <span class="cb-section-label">Folders</span>
+          <span class="cb-count">{length(dirs)}</span>
+        </div>
+        <div :for={dir <- dirs} class="cb-file-row">
+          <button
+            phx-click="navigate_subfolder"
+            phx-value-path={dir.full_path}
+            class="cb-file-btn"
+            style="color:#64748b"
+          >
+            <div class="cb-file-name" style="display:flex;align-items:center;gap:0.25rem">
+              <span style="opacity:0.5">📁</span> {dir.name}
+            </div>
+          </button>
+        </div>
+      </div>
+      <%!-- Markdown files --%>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin:0.5rem 0">
+        <span class="cb-section-label">Files</span>
+        <span class="cb-count">{length(files)}</span>
+      </div>
+      <div :for={file <- files} class="cb-file-row">
+        <button
+          phx-click="select_file"
+          phx-target="#folders-viewer"
+          phx-value-path={file.rel_path}
+          phx-value-folder={folder_path}
+          class={"cb-file-btn#{if @folder_nav_selected == file.rel_path, do: " cb-file-btn--active", else: ""}"}
+        >
+          <div class="cb-file-name">{file.name}</div>
+        </button>
+        <div class="cb-file-actions">
+          <a
+            :if={file_editor_urls[file.rel_path]}
+            href={file_editor_urls[file.rel_path]}
+            class="cb-action-btn"
+            title="Open in editor"
+          ><.icon_edit size={12} /></a>
+          <span
+            id={"copy-folder-file-#{file.rel_path}"}
+            class="cb-action-btn"
+            phx-hook="CopyPath"
+            data-path={file.full_path}
+            title={file.full_path}
+          ><.icon_copy size={12} /></span>
+        </div>
+      </div>
+      <div :if={files == []} class="cb-empty" style="font-size:0.7rem">No .md files in this folder</div>
+    </div>
+    <div :if={@selected_custom_folder && @folder_files == []} class="cb-empty">Empty folder</div>
+    <div :if={is_nil(@selected_custom_folder) && @custom_folders == [] && !@adding_folder} class="cb-empty">
+      No folders yet.
+      <div class="cb-empty-hint">Click + to add a folder</div>
+    </div>
+    """
+  end
+
+  defp folder_path_for(folders, selected_id) do
+    case Enum.find(folders, &(&1.id == selected_id)) do
+      nil -> nil
+      folder -> folder.path
+    end
+  end
+
+  # Browse entry helpers — entries are plain strings, {path, indices}, or {path, indices, direct, sub}
+  defp browse_entry_path({path, _indices, _direct, _sub}), do: path
+  defp browse_entry_path({path, _indices}), do: path
+  defp browse_entry_path(path) when is_binary(path), do: path
+
+  defp browse_md_badge({_path, _indices, direct, sub}) do
+    total = direct + sub
+
+    if total > 0 do
+      if sub > 0, do: "#{direct}+#{sub}", else: "#{direct}"
+    end
+  end
+
+  defp browse_md_badge(_), do: nil
+
+  defp highlight_match({path, indices, _direct, _sub}), do: highlight_match({path, indices})
+
+  defp highlight_match({path, indices}) do
+    idx_set = MapSet.new(indices)
+
+    html =
+      path
+      |> String.graphemes()
+      |> Enum.with_index()
+      |> Enum.map(fn {char, idx} ->
+        escaped = Phoenix.HTML.html_escape(char) |> Phoenix.HTML.safe_to_string()
+
+        if MapSet.member?(idx_set, idx) do
+          "<b style=\"color:#2563eb;background:#dbeafe;border-radius:1px\">#{escaped}</b>"
+        else
+          escaped
+        end
+      end)
+      |> Enum.join()
+
+    Phoenix.HTML.raw(html)
+  end
+
+  defp highlight_match(path) when is_binary(path), do: path
 
   def activity_sidebar(assigns) do
     ~H"""

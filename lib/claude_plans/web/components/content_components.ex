@@ -3,6 +3,7 @@ defmodule ClaudePlans.Web.Components.ContentComponents do
   use Phoenix.Component
 
   import ClaudePlans.Web.Components.Helpers
+  import ClaudePlans.Web.Icons
 
   def activity_content(assigns) do
     selected_event =
@@ -14,12 +15,20 @@ defmodule ClaudePlans.Web.Components.ContentComponents do
 
     ~H"""
     <div :if={@activity_diff_html && @selected_event} class="cb-content-wrap">
-      <div class="cb-content-header">
-        <div class="cb-file-header">{@selected_event.display_name}</div>
-        <div class="cb-header-actions">
-          <button phx-click="goto_activity_file" class="cb-action-btn" title="Go to file (Enter)">
-            Go to file &rarr;
-          </button>
+      <div class="cb-content-toolbar">
+        <div class="cb-toolbar-left">
+          <div class="cb-file-header">{@selected_event.display_name}</div>
+          <div class="cb-header-actions">
+            <button phx-click="goto_activity_file" class="cb-action-btn" title="Go to file (Enter)">
+              Go to file &rarr;
+            </button>
+          </div>
+        </div>
+        <div class="cb-display-controls">
+          <button id="theme-toggle-activity" class="cb-theme-toggle" phx-hook="ThemeToggle" phx-update="ignore"><.icon_moon size={14} /></button>
+          <button phx-click="font_size" phx-value-dir="down" class="cb-font-size-btn cb-font-size-btn--sm" title={"Smaller (#{@font_size}px)"}>A</button>
+          <span class="cb-font-size-sep">/</span>
+          <button phx-click="font_size" phx-value-dir="up" class="cb-font-size-btn cb-font-size-btn--lg" title={"Larger (#{@font_size}px)"}>A</button>
         </div>
       </div>
       <div class={if @selected_event.category == :plan, do: "cb-diff-view", else: "cp-content"}>
@@ -38,30 +47,38 @@ defmodule ClaudePlans.Web.Components.ContentComponents do
   def plans_content(assigns) do
     ~H"""
     <div :if={@html} class="cb-content-wrap">
-      <div class="cb-content-header">
-        <div class="cb-file-header">{@selected}</div>
-        <div class="cb-header-actions">
-          <button
-            :if={length(@versions) >= 2}
-            phx-click="toggle_diff"
-            class={"cb-action-btn#{if @view_mode == :diff, do: " cb-action-btn--active", else: ""}"}
-          >
-            Diff
-          </button>
-          <button
-            :if={@versions != []}
-            phx-click="toggle_versions"
-            class={"cb-action-btn#{if @show_versions, do: " cb-action-btn--active", else: ""}"}
-          >
-            History ({length(@versions)})
-          </button>
-          <button
-            :if={@view_mode == :rendered}
-            phx-click="toggle_inspector"
-            class={"cb-action-btn#{if @show_annotation_panel, do: " cb-action-btn--active", else: ""}"}
-          >
-            Annotate
-          </button>
+      <div class="cb-content-toolbar">
+        <div class="cb-toolbar-left">
+          <div class="cb-file-header">{@selected}</div>
+          <div class="cb-header-actions">
+            <button
+              :if={length(@versions) >= 2}
+              phx-click="toggle_diff"
+              class={"cb-action-btn#{if @view_mode == :diff, do: " cb-action-btn--active", else: ""}"}
+            >
+              Diff
+            </button>
+            <button
+              :if={@versions != []}
+              phx-click="toggle_versions"
+              class={"cb-action-btn#{if @show_versions, do: " cb-action-btn--active", else: ""}"}
+            >
+              History ({length(@versions)})
+            </button>
+            <button
+              :if={@view_mode == :rendered}
+              phx-click="toggle_inspector"
+              class={"cb-action-btn#{if @show_annotation_panel, do: " cb-action-btn--active", else: ""}"}
+            >
+              Annotate
+            </button>
+          </div>
+        </div>
+        <div class="cb-display-controls">
+          <button id="theme-toggle-plans" class="cb-theme-toggle" phx-hook="ThemeToggle" phx-update="ignore"><.icon_moon size={14} /></button>
+          <button phx-click="font_size" phx-value-dir="down" class="cb-font-size-btn cb-font-size-btn--sm" title={"Smaller (#{@font_size}px)"}>A</button>
+          <span class="cb-font-size-sep">/</span>
+          <button phx-click="font_size" phx-value-dir="up" class="cb-font-size-btn cb-font-size-btn--lg" title={"Larger (#{@font_size}px)"}>A</button>
         </div>
       </div>
       <div :if={@show_versions} class="cb-version-panel">
@@ -110,23 +127,6 @@ defmodule ClaudePlans.Web.Components.ContentComponents do
       <div class="cb-placeholder-inner">
         <div class="cb-placeholder-title">No plan selected</div>
         <div class="cb-placeholder-hint">Select a plan from the sidebar</div>
-      </div>
-    </div>
-    """
-  end
-
-  def projects_content(assigns) do
-    ~H"""
-    <div :if={@file_html} class="cb-content-wrap">
-      <div class="cb-file-header">{@selected_file}</div>
-      <div id="project-file-content" class="cp-content" phx-hook="PlanContent" phx-update="replace" data-highlight={@content_highlight} style={"font-size: #{@font_size}px"}>
-        {Phoenix.HTML.raw(@file_html)}
-      </div>
-    </div>
-    <div :if={is_nil(@file_html)} class="cb-placeholder">
-      <div class="cb-placeholder-inner">
-        <div :if={is_nil(@selected_project)} class="cb-placeholder-title">Select a project</div>
-        <div :if={@selected_project && is_nil(@selected_file)} class="cb-placeholder-title">Select a file</div>
       </div>
     </div>
     """

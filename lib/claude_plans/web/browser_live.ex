@@ -15,13 +15,17 @@ defmodule ClaudePlans.Web.BrowserLive do
   alias ClaudePlans.SearchIndex
   alias ClaudePlans.VersionStore
   alias ClaudePlans.Watcher
+  alias ClaudePlans.Folders
   alias ClaudePlans.Web.Components.{AnnotationComponents, ContentComponents, SidebarComponents}
+  alias ClaudePlans.Web.FoldersViewerComponent
+  alias ClaudePlans.Web.ProjectsViewerComponent
 
   @impl true
   def mount(_params, _session, socket) do
     if connected?(socket) do
       Watcher.subscribe()
       ActivityFeed.subscribe()
+      {:ok, _} = Registry.register(ClaudePlans.Registry, :folder_updates, [])
     end
 
     font_size =
@@ -48,8 +52,9 @@ defmodule ClaudePlans.Web.BrowserLive do
        selected_project: nil,
        project_files: [],
        selected_file: nil,
-       file_html: nil,
+       url_project_file: nil,
        projects_dir: projects_dir,
+       project_annotation_state: nil,
        search_query: "",
        search_results: [],
        content_highlight: nil,
@@ -71,7 +76,19 @@ defmodule ClaudePlans.Web.BrowserLive do
        show_annotation_panel: false,
        has_file_annotations: false,
        selected_activity_index: nil,
-       activity_diff_html: nil
+       activity_diff_html: nil,
+       custom_folders: Folders.list(),
+       selected_custom_folder: nil,
+       folder_files: [],
+       folder_nav_selected: nil,
+       adding_folder: false,
+       new_folder_path: "",
+       folder_path_error: nil,
+       browse_path: System.user_home!(),
+       browse_dirs: list_subdirs(System.user_home!()),
+       browse_filter: "",
+       url_folder_file: nil,
+       folder_annotation_state: nil
      )}
   end
 
@@ -85,6 +102,7 @@ defmodule ClaudePlans.Web.BrowserLive do
       |> apply_tab_switch(tab)
       |> apply_plan_selection(tab, params["plan"])
       |> apply_project_selection(tab, params["project"], params["file"])
+      |> apply_folder_params(tab, params)
       |> apply_search(query)
       |> apply_view_mode(tab, params["view"])
 
@@ -102,6 +120,10 @@ defmodule ClaudePlans.Web.BrowserLive do
     else
       socket
     end
+  end
+
+  defp apply_tab_switch(socket, :folders) do
+    assign(socket, active_tab: :folders, content_highlight: nil)
   end
 
   defp apply_tab_switch(socket, :activity) do
@@ -152,13 +174,32 @@ defmodule ClaudePlans.Web.BrowserLive do
   defp apply_file_change(socket, file)
        when is_binary(file) and file != "" do
     if file != socket.assigns.selected_file and socket.assigns.selected_project do
-      load_file_state(socket, file)
+      assign(socket, selected_file: file, url_project_file: file)
     else
       socket
     end
   end
 
   defp apply_file_change(socket, _file), do: socket
+
+  defp apply_folder_params(socket, :folders, params) do
+    socket = maybe_select_custom_folder(socket, params["folder"])
+    assign(socket, url_folder_file: params["folder_file"])
+  end
+
+  defp apply_folder_params(socket, _tab, _params), do: socket
+
+  defp maybe_select_custom_folder(socket, nil), do: socket
+  defp maybe_select_custom_folder(socket, ""), do: socket
+
+  defp maybe_select_custom_folder(socket, folder_id) do
+    if folder_id != socket.assigns.selected_custom_folder and
+         Enum.any?(socket.assigns.custom_folders, &(&1.id == folder_id)) do
+      load_custom_folder(socket, folder_id)
+    else
+      socket
+    end
+  end
 
   defp apply_search(socket, query) when query == socket.assigns.search_query, do: socket
 
@@ -202,7 +243,7 @@ defmodule ClaudePlans.Web.BrowserLive do
   def handle_event("noop", _params, socket), do: {:noreply, socket}
 
   def handle_event("switch_tab", %{"tab" => tab}, socket)
-      when tab in ~w(plans projects activity) do
+      when tab in ~w(plans projects folders activity) do
     {:noreply,
      push_patch(socket, to: UrlParams.build(socket.assigns, %{tab: String.to_existing_atom(tab)}))}
   end
@@ -219,10 +260,6 @@ defmodule ClaudePlans.Web.BrowserLive do
      push_patch(socket,
        to: UrlParams.build(socket.assigns, %{tab: :projects, project: dir_name, file: nil})
      )}
-  end
-
-  def handle_event("select_file", %{"path" => rel_path}, socket) do
-    {:noreply, push_patch(socket, to: UrlParams.build(socket.assigns, %{file: rel_path}))}
   end
 
   # --- Search ---
@@ -436,6 +473,206 @@ defmodule ClaudePlans.Web.BrowserLive do
     {:noreply, after_delete(socket.assigns.active_tab, socket)}
   end
 
+  # --- Custom Folders ---
+
+  def handle_event("select_custom_folder", %{"folder" => ""}, socket), do: {:noreply, socket}
+
+  def handle_event("select_custom_folder", %{"folder" => id}, socket) do
+    {:noreply,
+     push_patch(socket,
+       to: UrlParams.build(socket.assigns, %{tab: :folders, folder: id, folder_file: nil})
+     )}
+  end
+
+  def handle_event("show_add_folder", _params, socket) do
+    {:noreply, assign(socket, adding_folder: true, new_folder_path: "", folder_path_error: nil)}
+  end
+
+  def handle_event("validate_folder_path", %{"path" => path}, socket) do
+    error =
+      case Folders.validate_path(path) do
+        :ok -> nil
+        {:error, msg} -> msg
+      end
+
+    {:noreply, assign(socket, new_folder_path: path, folder_path_error: error)}
+  end
+
+  def handle_event("add_folder", %{"path" => path}, socket) do
+    case Folders.add(path) do
+      {:ok, folder} ->
+        ClaudePlans.FolderWatcherSupervisor.add_folder(folder.path)
+
+        socket =
+          socket
+          |> assign(
+            custom_folders: Folders.list(),
+            adding_folder: false,
+            new_folder_path: "",
+            folder_path_error: nil
+          )
+          |> load_custom_folder(folder.id)
+
+        {:noreply,
+         push_patch(socket,
+           to: UrlParams.build(socket.assigns, %{tab: :folders, folder: folder.id})
+         )}
+
+      {:error, _reason} ->
+        {:noreply, assign(socket, folder_path_error: "Failed to add folder")}
+    end
+  end
+
+  def handle_event("remove_folder", _params, socket) do
+    case socket.assigns.selected_custom_folder do
+      nil ->
+        {:noreply, socket}
+
+      id ->
+        folder = Enum.find(socket.assigns.custom_folders, &(&1.id == id))
+        Folders.remove(id)
+        if folder, do: ClaudePlans.FolderWatcherSupervisor.remove_folder(folder.path)
+
+        folders = Folders.list()
+
+        socket =
+          assign(socket,
+            custom_folders: folders,
+            selected_custom_folder: nil,
+            folder_files: [],
+            folder_nav_selected: nil
+          )
+
+        {:noreply,
+         push_patch(socket,
+           to: UrlParams.build(socket.assigns, %{tab: :folders, folder: nil, folder_file: nil})
+         )}
+    end
+  end
+
+  def handle_event("cancel_add_folder", _params, socket) do
+    {:noreply, assign(socket, adding_folder: false, new_folder_path: "", folder_path_error: nil)}
+  end
+
+  def handle_event("navigate_subfolder", %{"path" => path}, socket) do
+    if File.dir?(path) do
+      # Update the current folder's path to this subfolder
+      files = Folders.list_files(path)
+
+      # Update the folder config to point to the new path
+      folder_id = socket.assigns.selected_custom_folder
+      folders = socket.assigns.custom_folders
+
+      updated_folders =
+        Enum.map(folders, fn f ->
+          if f.id == folder_id do
+            %{f | path: path, name: Folders.display_name_for(path)}
+          else
+            f
+          end
+        end)
+
+      {:noreply,
+       assign(socket,
+         custom_folders: updated_folders,
+         folder_files: files,
+         folder_nav_selected: nil
+       )}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_event("refresh_dir_index", _params, socket) do
+    ClaudePlans.DirIndex.reindex()
+    {:noreply, socket}
+  end
+
+  def handle_event("browse_into", %{"path" => path}, socket) do
+    # path may be absolute, or relative to browse_path (direct browse)
+    # or relative to home (from DirIndex search)
+    full =
+      cond do
+        Path.type(path) == :absolute ->
+          path
+
+        File.dir?(Path.join(socket.assigns.browse_path, path)) ->
+          Path.join(socket.assigns.browse_path, path)
+
+        true ->
+          # Relative to home (from DirIndex)
+          Path.join(System.user_home!(), path)
+      end
+      |> Path.expand()
+
+    if File.dir?(full) do
+      {:noreply,
+       assign(socket,
+         browse_path: full,
+         browse_dirs: list_subdirs(full),
+         new_folder_path: full,
+         folder_path_error: nil,
+         browse_filter: ""
+       )}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_event("browse_up", _params, socket) do
+    parent = Path.dirname(socket.assigns.browse_path)
+
+    {:noreply,
+     assign(socket,
+       browse_path: parent,
+       browse_dirs: list_subdirs(parent),
+       new_folder_path: parent,
+       folder_path_error: nil,
+       browse_filter: ""
+     )}
+  end
+
+  def handle_event("browse_filter", %{"filter" => query}, socket) do
+    if query == "" do
+      base = socket.assigns.browse_path
+      {:noreply, assign(socket, browse_dirs: list_subdirs(base), browse_filter: "")}
+    else
+      # Instant search from pre-built index — returns [{path, match_indices}]
+      results = ClaudePlans.DirIndex.search(query, 30)
+      {:noreply, assign(socket, browse_dirs: results, browse_filter: query)}
+    end
+  end
+
+  def handle_event("browse_select", _params, socket) do
+    path = socket.assigns.browse_path
+
+    case Folders.add(path) do
+      {:ok, folder} ->
+        ClaudePlans.FolderWatcherSupervisor.add_folder(folder.path)
+
+        socket =
+          socket
+          |> assign(
+            custom_folders: Folders.list(),
+            adding_folder: false,
+            new_folder_path: "",
+            folder_path_error: nil
+          )
+          |> load_custom_folder(folder.id)
+
+        {:noreply,
+         push_patch(socket,
+           to: UrlParams.build(socket.assigns, %{tab: :folders, folder: folder.id})
+         )}
+
+      {:error, :already_added} ->
+        {:noreply, assign(socket, folder_path_error: "Already added")}
+
+      {:error, _} ->
+        {:noreply, assign(socket, folder_path_error: "Cannot add this folder")}
+    end
+  end
+
   # --- Annotations ---
 
   def handle_event("toggle_inspector", _params, socket) do
@@ -586,6 +823,33 @@ defmodule ClaudePlans.Web.BrowserLive do
      )}
   end
 
+  # --- Folders bridge ---
+
+  def handle_info({:folders_nav_state, selected}, socket) do
+    {:noreply, assign(socket, folder_nav_selected: selected)}
+  end
+
+  def handle_info({:folders_annotation_state, state}, socket) do
+    {:noreply, assign(socket, folder_annotation_state: state)}
+  end
+
+  def handle_info({:projects_nav_state, selected}, socket) do
+    {:noreply, assign(socket, selected_file: selected, url_project_file: selected)}
+  end
+
+  def handle_info({:projects_annotation_state, state}, socket) do
+    {:noreply, assign(socket, project_annotation_state: state)}
+  end
+
+  def handle_info({:folder_file_updated, folder_path, filename}, socket) do
+    send_update(FoldersViewerComponent,
+      id: "folders-viewer",
+      file_updated: {folder_path, filename}
+    )
+
+    {:noreply, socket}
+  end
+
   # --- Render ---
 
   @impl true
@@ -595,7 +859,7 @@ defmodule ClaudePlans.Web.BrowserLive do
       <div class="cb-sidebar">
         <div class="cb-tabs">
           <button
-            :for={{id, label} <- [{:plans, "Plans"}, {:projects, "Projects"}, {:activity, "Activity"}]}
+            :for={{id, label} <- [{:plans, "Plans"}, {:projects, "Projects"}, {:folders, "Folders"}, {:activity, "Activity"}]}
             phx-click="switch_tab"
             phx-value-tab={id}
             class={"cb-tab#{if @active_tab == id, do: " cb-tab--active", else: ""}"}
@@ -606,10 +870,6 @@ defmodule ClaudePlans.Web.BrowserLive do
             </span>
           </button>
           <button phx-click="kb_help" class="cb-help-btn" title="Keyboard shortcuts"><.icon_help size={14} /></button>
-          <button id="theme-toggle" class="cb-theme-toggle" phx-hook="ThemeToggle" phx-update="ignore"><.icon_moon size={14} /></button>
-          <button phx-click="font_size" phx-value-dir="down" class="cb-font-size-btn cb-font-size-btn--sm" title={"Smaller (current: #{@font_size}px)"}>A</button>
-          <span class="cb-font-size-sep">/</span>
-          <button phx-click="font_size" phx-value-dir="up" class="cb-font-size-btn cb-font-size-btn--lg" title={"Larger (current: #{@font_size}px)"}>A</button>
         </div>
         <div class="cb-sidebar-body">
           <div class="cb-search-wrap">
@@ -633,6 +893,7 @@ defmodule ClaudePlans.Web.BrowserLive do
             <%= case @active_tab do %>
               <% :plans -> %><SidebarComponents.plans_sidebar {assigns} />
               <% :projects -> %><SidebarComponents.projects_sidebar {assigns} />
+              <% :folders -> %><SidebarComponents.folders_sidebar {assigns} />
               <% :activity -> %><SidebarComponents.activity_sidebar {assigns} />
             <% end %>
           <% end %>
@@ -641,11 +902,34 @@ defmodule ClaudePlans.Web.BrowserLive do
       <div class="cb-main">
         <%= case @active_tab do %>
           <% :plans -> %><ContentComponents.plans_content {assigns} />
-          <% :projects -> %><ContentComponents.projects_content {assigns} />
+          <% :projects -> %>
+            <.live_component
+              module={ProjectsViewerComponent}
+              id="projects-viewer"
+              font_size={@font_size}
+              content_highlight={@content_highlight}
+              project_path={current_project_path(assigns)}
+              initial_file={@url_project_file}
+            />
+          <% :folders -> %>
+            <.live_component
+              module={FoldersViewerComponent}
+              id="folders-viewer"
+              font_size={@font_size}
+              content_highlight={@content_highlight}
+              folder_path={current_folder_path(assigns)}
+              initial_file={@url_folder_file}
+            />
           <% :activity -> %><ContentComponents.activity_content {assigns} />
         <% end %>
       </div>
-      <AnnotationComponents.annotation_panel {assigns} />
+      <AnnotationComponents.annotation_panel :if={@active_tab == :plans} {assigns} />
+      <%= if @active_tab == :folders && @folder_annotation_state && @folder_annotation_state.show_annotation_panel do %>
+        <.component_annotation_panel state={@folder_annotation_state} target="#folders-viewer" prefix="folder" />
+      <% end %>
+      <%= if @active_tab == :projects && @project_annotation_state && @project_annotation_state.show_annotation_panel do %>
+        <.component_annotation_panel state={@project_annotation_state} target="#projects-viewer" prefix="project" />
+      <% end %>
       <AnnotationComponents.help_modal {assigns} />
     </div>
     """
@@ -817,6 +1101,12 @@ defmodule ClaudePlans.Web.BrowserLive do
           &(&1.rel_path == socket.assigns.selected_file)
         )
 
+      :folders ->
+        Enum.find_index(
+          socket.assigns.folder_files,
+          &(&1.rel_path == socket.assigns.folder_nav_selected)
+        )
+
       :activity ->
         socket.assigns.selected_activity_index
 
@@ -830,6 +1120,7 @@ defmodule ClaudePlans.Web.BrowserLive do
       socket.assigns.search_query != "" -> socket.assigns.search_results
       socket.assigns.active_tab == :plans -> socket.assigns.plans
       socket.assigns.active_tab == :projects -> socket.assigns.project_files
+      socket.assigns.active_tab == :folders -> socket.assigns.folder_files
       socket.assigns.active_tab == :activity -> socket.assigns.activity_events
       true -> []
     end
@@ -844,8 +1135,21 @@ defmodule ClaudePlans.Web.BrowserLive do
          )}
 
       :projects ->
-        {:noreply,
-         push_patch(socket, to: UrlParams.build(socket.assigns, %{file: item.rel_path}))}
+        send_update(ProjectsViewerComponent,
+          id: "projects-viewer",
+          initial_file: item.rel_path
+        )
+
+        {:noreply, assign(socket, selected_file: item.rel_path)}
+
+      :folders ->
+        # Send file selection to the LiveComponent via send_update
+        send_update(FoldersViewerComponent,
+          id: "folders-viewer",
+          initial_file: item.rel_path
+        )
+
+        {:noreply, assign(socket, folder_nav_selected: item.rel_path)}
 
       :activity ->
         idx = Enum.find_index(socket.assigns.activity_events, &(&1.id == item.id)) || 0
@@ -897,26 +1201,18 @@ defmodule ClaudePlans.Web.BrowserLive do
         socket
       end
 
-    full_path = Path.join([socket.assigns.projects_dir, proj, rel])
-
-    case File.read(full_path) do
-      {:ok, content} ->
-        {:noreply,
-         socket
-         |> assign(
-           active_tab: :projects,
-           selected_file: rel,
-           file_html: RenderCache.render(content),
-           content_highlight: highlight
-         )
-         |> push_patch(
-           to: UrlParams.build(socket.assigns, %{tab: :projects, project: proj, file: rel}),
-           replace: true
-         )}
-
-      {:error, _} ->
-        {:noreply, socket}
-    end
+    {:noreply,
+     socket
+     |> assign(
+       active_tab: :projects,
+       selected_file: rel,
+       url_project_file: rel,
+       content_highlight: highlight
+     )
+     |> push_patch(
+       to: UrlParams.build(socket.assigns, %{tab: :projects, project: proj, file: rel}),
+       replace: true
+     )}
   end
 
   defp search_result_paths(results, projects_dir) do
@@ -932,7 +1228,7 @@ defmodule ClaudePlans.Web.BrowserLive do
   defp load_project(socket, dir_name) do
     projects_dir = socket.assigns.projects_dir
     files = Projects.list_files(projects_dir, dir_name)
-    {selected_file, file_html} = load_first_file(projects_dir, dir_name, files)
+    first_file = if files != [], do: hd(files).rel_path
 
     # Pre-render all project files in background
     all_paths = Enum.map(files, &Path.join([projects_dir, dir_name, &1.rel_path]))
@@ -941,8 +1237,9 @@ defmodule ClaudePlans.Web.BrowserLive do
     assign(socket,
       selected_project: dir_name,
       project_files: files,
-      selected_file: selected_file,
-      file_html: file_html
+      selected_file: first_file,
+      url_project_file: first_file,
+      project_annotation_state: nil
     )
   end
 
@@ -974,22 +1271,11 @@ defmodule ClaudePlans.Web.BrowserLive do
   defp after_delete(:projects, socket) do
     %{projects_dir: dir, selected_project: project} = socket.assigns
     files = Projects.list_files(dir, project)
-    {selected_file, file_html} = load_first_file(dir, project, files)
-    assign(socket, project_files: files, selected_file: selected_file, file_html: file_html)
+    first_file = if files != [], do: hd(files).rel_path
+    assign(socket, project_files: files, selected_file: first_file, url_project_file: first_file)
   end
 
   defp after_delete(_tab, socket), do: socket
-
-  defp load_first_file(_projects_dir, _project, []), do: {nil, nil}
-
-  defp load_first_file(projects_dir, project, [first | _]) do
-    full = Path.join([projects_dir, project, first.rel_path])
-
-    case File.read(full) do
-      {:ok, content} -> {first.rel_path, RenderCache.render(content)}
-      {:error, _} -> {first.rel_path, nil}
-    end
-  end
 
   defp reset_annotation_assigns(socket, content) do
     assign(socket,
@@ -1109,26 +1395,143 @@ defmodule ClaudePlans.Web.BrowserLive do
     end
   end
 
-  defp load_file_state(socket, rel_path) do
-    full_path =
-      Path.join([socket.assigns.projects_dir, socket.assigns.selected_project, rel_path])
+  # --- Custom Folders helpers ---
 
-    case File.read(full_path) do
-      {:ok, content} ->
-        project_files = socket.assigns.project_files
-        idx = Enum.find_index(project_files, &(&1.rel_path == rel_path)) || 0
-        base = Path.join(socket.assigns.projects_dir, socket.assigns.selected_project)
-        nearby_paths = Enum.map(project_files, &Path.join(base, &1.rel_path))
-        RenderCache.prerender_nearby(nearby_paths, idx)
+  defp load_custom_folder(socket, folder_id) do
+    folder = Enum.find(socket.assigns.custom_folders, &(&1.id == folder_id))
 
-        assign(socket,
-          selected_file: rel_path,
-          file_html: RenderCache.render(content),
-          content_highlight: nil
-        )
+    if folder do
+      files = Folders.list_files(folder.path)
+
+      assign(socket,
+        selected_custom_folder: folder_id,
+        folder_files: files,
+        folder_nav_selected: nil
+      )
+    else
+      socket
+    end
+  end
+
+  defp current_project_path(assigns) do
+    case assigns[:selected_project] do
+      nil -> nil
+      project -> Path.join(assigns.projects_dir, project)
+    end
+  end
+
+  defp current_folder_path(assigns) do
+    case assigns[:selected_custom_folder] do
+      nil ->
+        nil
+
+      id ->
+        case Enum.find(assigns.custom_folders, &(&1.id == id)) do
+          nil -> nil
+          folder -> folder.path
+        end
+    end
+  end
+
+  defp list_subdirs(path) do
+    case File.ls(path) do
+      {:ok, entries} ->
+        entries
+        |> Enum.filter(fn name ->
+          not String.starts_with?(name, ".") and File.dir?(Path.join(path, name))
+        end)
+        |> Enum.sort()
+        |> Enum.take(50)
 
       {:error, _} ->
-        socket
+        []
     end
+  end
+
+  # Reusable annotation panel for LiveComponent-based tabs (Folders, Projects)
+  # Events target the component via phx-target={@target}, IDs are prefixed with @prefix
+  attr :state, :map, required: true
+  attr :target, :string, required: true
+  attr :prefix, :string, required: true
+
+  defp component_annotation_panel(assigns) do
+    state = assigns.state
+
+    assigns =
+      assign(assigns,
+        annotations: state.annotations,
+        editing_annotation: state.editing_annotation,
+        has_file_annotations: state.has_file_annotations,
+        selected: state.selected
+      )
+
+    ~H"""
+    <div class="cb-annotation-panel">
+      <div class="cb-annotation-header">
+        <span class="cb-section-label">Annotations</span>
+        <span :if={@annotations != []} class="cb-count">({length(@annotations)})</span>
+        <button :if={@annotations != []} phx-click="clear_annotations" phx-target={@target} class="cb-annotation-clear">Clear all</button>
+      </div>
+      <div class="cb-annotation-body">
+        <div :if={@annotations == []} class="cb-annotation-empty">
+          Click any block to annotate it
+        </div>
+        <div :for={ann <- @annotations} class="cb-annotation-card" id={"#{@prefix}-ann-#{ann.id}"}>
+          <div class="cb-annotation-card-header">
+            <span class="cb-annotation-label">{ann.id}</span>
+            <button phx-click="remove_annotation" phx-value-id={ann.id} phx-target={@target} class="cb-annotation-remove" title="Remove">&times;</button>
+          </div>
+          <div class="cb-annotation-ref">{ann.block_path}</div>
+          <%= if @editing_annotation == ann.id do %>
+            <form phx-change="update_annotation" phx-value-id={ann.id} phx-target={@target}>
+              <textarea
+                id={"#{@prefix}-ann-input-#{ann.id}"}
+                name="direction"
+                class="cb-annotation-input"
+                placeholder="What should change?"
+                rows="2"
+                phx-debounce="300"
+              >{ann.direction}</textarea>
+            </form>
+            <button phx-click="save_annotation" phx-value-id={ann.id} phx-target={@target} class="cb-annotation-save">Save</button>
+          <% else %>
+            <div
+              phx-click="edit_annotation"
+              phx-value-id={ann.id}
+              phx-target={@target}
+              class={"cb-annotation-display#{if ann.direction == "", do: " cb-annotation-display--empty", else: ""}"}
+            >
+              {if ann.direction == "", do: "Click to add direction...", else: ann.direction}
+            </div>
+          <% end %>
+        </div>
+      </div>
+      <div :if={@annotations != []} class="cb-annotation-footer">
+        <button
+          id={"#{@prefix}-copy-annotations"}
+          class="cb-annotation-copy"
+          phx-hook="CopyAnnotations"
+          data-filename={@selected}
+          data-annotations={Jason.encode!(@annotations)}
+        >
+          Copy All Annotations
+        </button>
+        <button
+          id={"#{@prefix}-write-annotations"}
+          class="cb-annotation-write"
+          phx-hook="WriteAnnotations"
+          phx-click="write_annotations"
+          phx-target={@target}
+        >
+          Write to File
+        </button>
+      </div>
+      <div :if={@annotations == [] && @has_file_annotations} class="cb-annotation-footer">
+        <button phx-click="strip_annotations" phx-target={@target} class="cb-annotation-strip">
+          Strip Annotations from File
+        </button>
+      </div>
+    </div>
+    """
   end
 end

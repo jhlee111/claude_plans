@@ -13,6 +13,8 @@ defmodule ClaudePlans.Application do
       {Task.Supervisor, name: ClaudePlans.TaskSupervisor},
       ClaudePlans.Watcher,
       ClaudePlans.VersionStore,
+      {ClaudePlans.FolderWatcherSupervisor, []},
+      ClaudePlans.DirIndex,
       ClaudePlans.SearchIndex,
       ClaudePlans.RenderCache,
       ClaudePlans.ActivityFeed,
@@ -21,6 +23,11 @@ defmodule ClaudePlans.Application do
 
     opts = [strategy: :one_for_one, name: ClaudePlans.Supervisor]
     {:ok, pid} = Supervisor.start_link(children, opts)
+
+    # Async init: start folder watchers without blocking app startup
+    Task.Supervisor.start_child(ClaudePlans.TaskSupervisor, fn ->
+      ClaudePlans.FolderWatcherSupervisor.init_all()
+    end)
 
     if Application.get_env(:claude_plans, :open_browser, false) do
       port = ClaudePlans.Endpoint.config(:http) |> Keyword.get(:port, 4002)
