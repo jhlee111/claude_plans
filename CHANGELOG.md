@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.1] - 2026-03-30
+
+### Added
+- **Activity feed for folders** — Custom folder file changes now appear in the Activity tab with folder name label; clicking navigates directly to the changed file
+- **Subfolder breadcrumb navigation** — Navigating into subfolders shows a back button with current path indicator instead of destructively overwriting the folder config
+- **Folder auto-refresh** — Sidebar file list updates automatically when files are added or removed in watched folders
+- **Content width toggle** — Toolbar button to switch between narrow (56rem) and wide (72rem) content width, persisted in localStorage
+- **Annotation content preview** — Bullet and paragraph annotations include text preview (up to 40 chars) in block_path for better LLM context
+
+### Fixed
+- Clicking directly on a heading to annotate now correctly uses that heading instead of the preceding one
+- Projects tab now receives file change events for live content refresh
+
 ## [0.9.0] - 2026-03-30
 
 ### Added
