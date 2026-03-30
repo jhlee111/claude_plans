@@ -584,6 +584,69 @@ body {
   color: #888;
 }
 
+/* Folder breadcrumb navigation */
+.cb-folder-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-bottom: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  background: #f1f5f9;
+  border-radius: 0.375rem;
+  border: 1px solid #e2e8f0;
+}
+.cb-folder-back-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 0.25rem;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #475569;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+.cb-folder-back-btn:hover {
+  background: #e2e8f0;
+  color: #1e293b;
+  border-color: #94a3b8;
+}
+.cb-folder-breadcrumb-path {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.7rem;
+  color: #475569;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.cb-folder-breadcrumb-path svg {
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+[data-theme="dark"] .cb-folder-breadcrumb {
+  background: #1e1e1e;
+  border-color: #333;
+}
+[data-theme="dark"] .cb-folder-back-btn {
+  background: #2a2a2a;
+  border-color: #444;
+  color: #aaa;
+}
+[data-theme="dark"] .cb-folder-back-btn:hover {
+  background: #333;
+  color: #ddd;
+  border-color: #555;
+}
+[data-theme="dark"] .cb-folder-breadcrumb-path {
+  color: #aaa;
+}
+
 /* Select dark */
 [data-theme="dark"] .cb-select {
   background: #1a1a1a;

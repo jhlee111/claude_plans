@@ -52,10 +52,10 @@ defmodule ClaudePlans.Web.FoldersViewerComponent do
       # Step 3: one-time event — file_updated (bridge from BrowserLive)
       |> then(fn s ->
         case new_assigns do
-          %{file_updated: {folder_path, filename}} when not is_nil(folder_path) ->
+          %{file_updated: {folder_path, rel_path}} when not is_nil(folder_path) ->
             s =
               if s.assigns.folder_path == folder_path and
-                   Path.basename(s.assigns.viewer.selected || "") == filename do
+                   (s.assigns.viewer.selected || "") == rel_path do
                 refresh_current_file(s)
               else
                 s

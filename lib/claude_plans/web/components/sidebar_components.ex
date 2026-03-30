@@ -218,11 +218,23 @@ defmodule ClaudePlans.Web.Components.SidebarComponents do
     </div>
     <div :if={@selected_custom_folder && @folder_files != []}>
       <%
-        folder_path = folder_path_for(@custom_folders, @selected_custom_folder)
+        folder_path = @folder_current_path || folder_path_for(@custom_folders, @selected_custom_folder)
+        original_path = folder_path_for(@custom_folders, @selected_custom_folder)
+        in_subfolder = @folder_current_path != nil && @folder_current_path != original_path
         dirs = Enum.filter(@folder_files, & &1.type == :dir)
         files = Enum.filter(@folder_files, & &1.type == :file)
         file_editor_urls = Map.new(files, fn f -> {f.rel_path, editor_url(f.full_path)} end)
       %>
+      <%!-- Subfolder breadcrumb bar --%>
+      <div :if={in_subfolder} class="cb-folder-breadcrumb">
+        <button phx-click="navigate_folder_up" class="cb-folder-back-btn" title="Go to parent folder">
+          <.icon_chevron_left size={14} />
+        </button>
+        <div class="cb-folder-breadcrumb-path">
+          <.icon_folder size={12} />
+          <span title={folder_path}>{Path.relative_to(folder_path, original_path)}</span>
+        </div>
+      </div>
       <%!-- Subdirectories --%>
       <div :if={dirs != []} style="margin-bottom:0.5rem">
         <div style="display:flex;align-items:center;justify-content:space-between;margin:0.5rem 0">
@@ -275,7 +287,18 @@ defmodule ClaudePlans.Web.Components.SidebarComponents do
       </div>
       <div :if={files == []} class="cb-empty" style="font-size:0.7rem">No .md files in this folder</div>
     </div>
-    <div :if={@selected_custom_folder && @folder_files == []} class="cb-empty">Empty folder</div>
+    <div :if={@selected_custom_folder && @folder_files == []}>
+      <div :if={@folder_current_path} class="cb-folder-breadcrumb">
+        <button phx-click="navigate_folder_up" class="cb-folder-back-btn" title="Go to parent folder">
+          <.icon_chevron_left size={14} />
+        </button>
+        <div class="cb-folder-breadcrumb-path">
+          <.icon_folder size={12} />
+          <span>{Path.basename(@folder_current_path)}</span>
+        </div>
+      </div>
+      <div class="cb-empty">Empty folder</div>
+    </div>
     <div :if={is_nil(@selected_custom_folder) && @custom_folders == [] && !@adding_folder} class="cb-empty">
       No folders yet.
       <div class="cb-empty-hint">Click + to add a folder</div>

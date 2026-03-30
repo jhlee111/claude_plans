@@ -16,6 +16,7 @@ defmodule ClaudePlans.Web.BrowserLive do
   alias ClaudePlans.VersionStore
   alias ClaudePlans.Watcher
   alias ClaudePlans.Folders
+  alias ClaudePlans.FolderWatcherSupervisor
   alias ClaudePlans.Web.Components.{AnnotationComponents, ContentComponents, SidebarComponents}
   alias ClaudePlans.Web.FoldersViewerComponent
   alias ClaudePlans.Web.ProjectsViewerComponent
@@ -93,6 +94,7 @@ defmodule ClaudePlans.Web.BrowserLive do
        selected_custom_folder: nil,
        folder_files: [],
        folder_nav_selected: nil,
+       folder_current_path: nil,
        adding_folder: false,
        new_folder_path: "",
        folder_path_error: nil,
@@ -577,26 +579,33 @@ defmodule ClaudePlans.Web.BrowserLive do
 
   def handle_event("navigate_subfolder", %{"path" => path}, socket) do
     if File.dir?(path) do
-      # Update the current folder's path to this subfolder
       files = Folders.list_files(path)
-
-      # Update the folder config to point to the new path
-      folder_id = socket.assigns.selected_custom_folder
-      folders = socket.assigns.custom_folders
-
-      updated_folders =
-        Enum.map(folders, fn f ->
-          if f.id == folder_id do
-            %{f | path: path, name: Folders.display_name_for(path)}
-          else
-            f
-          end
-        end)
 
       {:noreply,
        assign(socket,
-         custom_folders: updated_folders,
          folder_files: files,
+         folder_current_path: path,
+         folder_nav_selected: nil
+       )}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_event("navigate_folder_up", _params, socket) do
+    current = socket.assigns.folder_current_path
+    original = folder_original_path(socket.assigns)
+
+    if current && current != original do
+      parent = Path.dirname(current)
+      # Don't go above the original folder path
+      target = if String.starts_with?(parent, original), do: parent, else: original
+      files = Folders.list_files(target)
+
+      {:noreply,
+       assign(socket,
+         folder_files: files,
+         folder_current_path: if(target == original, do: nil, else: target),
          folder_nav_selected: nil
        )}
     else
@@ -862,11 +871,34 @@ defmodule ClaudePlans.Web.BrowserLive do
     {:noreply, assign(socket, project_annotation_state: state)}
   end
 
-  def handle_info({:folder_file_updated, folder_path, filename}, socket) do
+  def handle_info({:folder_file_updated, watched_path, full_file_path}, socket) do
+    rel = Path.relative_to(full_file_path, watched_path)
+
+    # Forward to Folders tab component
     send_update(FoldersViewerComponent,
       id: "folders-viewer",
-      file_updated: {folder_path, filename}
+      file_updated: {watched_path, rel}
     )
+
+    # Forward to Projects tab component if the watched path matches the active project
+    project_path = current_project_path(socket.assigns)
+
+    if project_path && watched_path == project_path do
+      send_update(ProjectsViewerComponent,
+        id: "projects-viewer",
+        file_updated: {watched_path, rel}
+      )
+    end
+
+    # Refresh sidebar file list if the change is in the currently selected folder
+    socket =
+      case current_folder_path(socket.assigns) do
+        ^watched_path ->
+          assign(socket, folder_files: Folders.list_files(watched_path))
+
+        _ ->
+          socket
+      end
 
     {:noreply, socket}
   end
@@ -1252,10 +1284,14 @@ defmodule ClaudePlans.Web.BrowserLive do
     projects_dir = socket.assigns.projects_dir
     files = Projects.list_files(projects_dir, dir_name)
     first_file = if files != [], do: hd(files).rel_path
+    project_path = Path.join(projects_dir, dir_name)
 
     # Pre-render all project files in background
-    all_paths = Enum.map(files, &Path.join([projects_dir, dir_name, &1.rel_path]))
+    all_paths = Enum.map(files, &Path.join(project_path, &1.rel_path))
     RenderCache.prerender(all_paths)
+
+    # Start file watcher for the project directory
+    FolderWatcherSupervisor.add_folder(project_path)
 
     assign(socket,
       selected_project: dir_name,
@@ -1429,7 +1465,8 @@ defmodule ClaudePlans.Web.BrowserLive do
       assign(socket,
         selected_custom_folder: folder_id,
         folder_files: files,
-        folder_nav_selected: nil
+        folder_nav_selected: nil,
+        folder_current_path: nil
       )
     else
       socket
@@ -1444,6 +1481,10 @@ defmodule ClaudePlans.Web.BrowserLive do
   end
 
   defp current_folder_path(assigns) do
+    assigns[:folder_current_path] || folder_original_path(assigns)
+  end
+
+  defp folder_original_path(assigns) do
     case assigns[:selected_custom_folder] do
       nil ->
         nil

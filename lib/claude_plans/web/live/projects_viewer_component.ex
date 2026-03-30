@@ -45,7 +45,25 @@ defmodule ClaudePlans.Web.ProjectsViewerComponent do
           s
         end
       end)
-      # Step 3: keyboard_event delegation
+      # Step 3: one-time event — file_updated (bridge from BrowserLive)
+      |> then(fn s ->
+        case new_assigns do
+          %{file_updated: {project_path, rel_path}} when not is_nil(project_path) ->
+            s =
+              if s.assigns.project_path == project_path and
+                   (s.assigns.viewer.selected || "") == rel_path do
+                refresh_current_file(s)
+              else
+                s
+              end
+
+            assign(s, file_updated: nil)
+
+          _ ->
+            s
+        end
+      end)
+      # Step 4: keyboard_event delegation
       |> then(fn s ->
         case new_assigns do
           %{keyboard_event: {event, params}} when not is_nil(event) ->
@@ -268,6 +286,10 @@ defmodule ClaudePlans.Web.ProjectsViewerComponent do
       {:error, _} ->
         socket
     end
+  end
+
+  defp refresh_current_file(socket) do
+    update_viewer(socket, &ViewerState.refresh_on_file_change/1)
   end
 
   defp update_viewer(socket, fun) do
