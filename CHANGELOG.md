@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-03-30
+
+### Added
+- **Folders tab** — Browse and view markdown files from any directory on your system, not just Claude's plans folder. Add/remove custom folders, navigate subdirectories, and fuzzy-search directories with a background indexer
+- **Projects tab: diff, history & annotations** — Projects tab now has full diff view, version history, and annotation inspector (previously only available in Plans tab), powered by a reusable ViewerState + LiveComponent architecture
+- **Sticky content toolbar** — Theme toggle and font size controls moved from sidebar to a fixed toolbar above the document content, alongside file name and action buttons (Diff, History, Annotate)
+- **Version display** — App version now shown in the keyboard shortcuts help modal
+- Per-folder file watchers for live-reloading custom folder files on change
+
+### Changed
+- Annotation panel refactored into a shared component used by both Folders and Projects tabs
+- VersionStore generalized to support arbitrary file paths (not just plans directory)
+
 ## [0.8.4] - 2026-03-29
 
 ### Fixed

@@ -27,7 +27,8 @@ A4 (## Data Flow > diagram node A "Member checks in"): Where does this validatio
 - **Version history** — Automatic snapshots on each file change with persistent history
 - **Diff view** — Side-by-side line-level diff between any two plan versions with hunk collapsing
 - **Activity feed** — Real-time feed of file changes (creates, updates, deletes) across plans and project memory with inline diff preview and direct navigation
-- **Projects tab** — Browse project memory files across all Claude Code projects
+- **Projects tab** — Browse project memory files across all Claude Code projects with diff, history, and annotations
+- **Folders tab** — Browse markdown files from any directory on your system with fuzzy directory search, live file watching, and full viewer support
 - **Dark / Light mode** — Auto-detects OS preference, toggle with one click, persisted in localStorage
 - **Server-side Markdown** — Rendered via MDEx with GitHub-style syntax highlighting
 - **Mermaid diagrams** — Server-side rendering via MDExMermex (no CDN) with semantic SVG output for node/edge annotation
@@ -56,7 +57,7 @@ claude-plans
 
 ```bash
 # macOS Apple Silicon
-curl -L -o claude-plans https://github.com/jhlee111/claude_plans/releases/download/v0.7.1/claude_plans_macos_arm
+curl -L -o claude-plans https://github.com/jhlee111/claude_plans/releases/download/v0.9.0/claude_plans_macos_arm
 chmod +x claude-plans
 ./claude-plans
 ```
