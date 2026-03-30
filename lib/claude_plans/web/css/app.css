@@ -504,6 +504,53 @@ body {
   border-color: #7f1d1d;
 }
 
+/* Folder browser */
+.cb-browse-list {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.375rem;
+  background: #f8fafc;
+}
+.cb-browse-item {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  width: 100%;
+  padding: 0.3rem 0.5rem;
+  border: none;
+  border-bottom: 1px solid #f1f5f9;
+  background: none;
+  cursor: pointer;
+  font-size: 0.7rem;
+  color: #334155;
+  text-align: left;
+}
+.cb-browse-item:hover {
+  background: #eef2ff;
+}
+.cb-browse-path {
+  font-size: 0.65rem;
+  color: #64748b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+[data-theme="dark"] .cb-browse-list {
+  background: #1a1a1a;
+  border-color: #333;
+}
+[data-theme="dark"] .cb-browse-item {
+  color: #ccc;
+  border-bottom-color: #222;
+}
+[data-theme="dark"] .cb-browse-item:hover {
+  background: #222;
+}
+[data-theme="dark"] .cb-browse-path {
+  color: #888;
+}
+
 /* Select dark */
 [data-theme="dark"] .cb-select {
   background: #1a1a1a;
