@@ -3,12 +3,13 @@ defmodule ClaudePlans.ActivityFeed do
   use GenServer
   require Logger
   alias ClaudePlans.Debounce
+  alias ClaudePlans.Folders
 
   @type event :: %{
           id: String.t(),
           path: String.t(),
           action: :created | :updated | :deleted,
-          category: :plan | :project_memory | :project_config,
+          category: :plan | :project_memory | :project_config | :folder,
           display_name: String.t(),
           project: String.t() | nil,
           rel_path: String.t(),
@@ -40,6 +41,12 @@ defmodule ClaudePlans.ActivityFeed do
     GenServer.call(__MODULE__, :list_events)
   end
 
+  @doc "Record a folder file change event."
+  @spec record_folder_event(String.t(), String.t()) :: :ok
+  def record_folder_event(folder_path, file_path) do
+    GenServer.cast(__MODULE__, {:folder_event, folder_path, file_path})
+  end
+
   # --- GenServer callbacks ---
 
   @impl true
@@ -69,6 +76,22 @@ defmodule ClaudePlans.ActivityFeed do
   @impl true
   def handle_call(:list_events, _from, state) do
     {:reply, state.events, state}
+  end
+
+  @impl true
+  def handle_cast({:folder_event, folder_path, file_path}, state) do
+    action = determine_action(file_path, state.known_files)
+    folder_name = Folders.display_name_for(folder_path)
+    rel_path = Path.relative_to(file_path, folder_path)
+
+    process_activity_event(
+      state,
+      file_path,
+      action,
+      :folder,
+      folder_name,
+      rel_path
+    )
   end
 
   @impl true

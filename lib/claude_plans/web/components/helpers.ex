@@ -33,6 +33,7 @@ defmodule ClaudePlans.Web.Components.Helpers do
   def category_label(:plan), do: "plan"
   def category_label(:project_memory), do: "memory"
   def category_label(:project_config), do: "config"
+  def category_label(:folder), do: "folder"
 
   def format_project_name(dir_name), do: ClaudePlans.Projects.display_name(dir_name)
 

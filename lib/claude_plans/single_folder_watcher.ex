@@ -51,12 +51,12 @@ defmodule ClaudePlans.SingleFolderWatcher do
 
   @impl true
   def handle_info({:debounced_notify, file_path}, state) do
-    filename = Path.basename(file_path)
-
     Registry.dispatch(ClaudePlans.Registry, :folder_updates, fn entries ->
       for {pid, _} <- entries,
-          do: send(pid, {:folder_file_updated, state.path, filename})
+          do: send(pid, {:folder_file_updated, state.path, file_path})
     end)
+
+    ClaudePlans.ActivityFeed.record_folder_event(state.path, file_path)
 
     {:noreply, %{state | debounce_timers: Debounce.clear(state.debounce_timers, file_path)}}
   end

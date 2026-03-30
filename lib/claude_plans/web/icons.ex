@@ -87,6 +87,17 @@ defmodule ClaudePlans.Web.Icons do
   attr :size, :integer, default: 16
   attr :class, :string, default: ""
 
+  def icon_columns(assigns) do
+    ~H"""
+    <.svg size={@size} class={@class}>
+      <rect width="18" height="18" x="3" y="3" rx="2" ry="2" /><line x1="12" x2="12" y1="3" y2="21" />
+    </.svg>
+    """
+  end
+
+  attr :size, :integer, default: 16
+  attr :class, :string, default: ""
+
   def icon_x(assigns) do
     ~H"""
     <.svg size={@size} class={@class}>
@@ -146,6 +157,28 @@ defmodule ClaudePlans.Web.Icons do
     ~H"""
     <.svg size={@size} class={@class}>
       <path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /><line x1="10" x2="10" y1="11" y2="17" /><line x1="14" x2="14" y1="11" y2="17" />
+    </.svg>
+    """
+  end
+
+  attr :size, :integer, default: 16
+  attr :class, :string, default: ""
+
+  def icon_chevron_left(assigns) do
+    ~H"""
+    <.svg size={@size} class={@class}>
+      <path d="m15 18-6-6 6-6" />
+    </.svg>
+    """
+  end
+
+  attr :size, :integer, default: 16
+  attr :class, :string, default: ""
+
+  def icon_folder(assigns) do
+    ~H"""
+    <.svg size={@size} class={@class}>
+      <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
     </.svg>
     """
   end
