@@ -17,10 +17,17 @@ defmodule ClaudePlans.FolderWatcherSupervisor do
   def add_folder(path) do
     if Process.whereis(__MODULE__) do
       case DynamicSupervisor.start_child(__MODULE__, {ClaudePlans.SingleFolderWatcher, path}) do
-        {:ok, _pid} -> :ok
-        {:error, {:already_started, _pid}} -> :ok
+        {:ok, _pid} ->
+          :ok
+
+        {:error, {:already_started, _pid}} ->
+          :ok
+
         {:error, reason} ->
-          Logger.warning("[FolderWatcherSupervisor] Failed to start watcher for #{path}: #{inspect(reason)}")
+          Logger.warning(
+            "[FolderWatcherSupervisor] Failed to start watcher for #{path}: #{inspect(reason)}"
+          )
+
           :ok
       end
     else

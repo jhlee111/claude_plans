@@ -69,4 +69,15 @@ defmodule ClaudePlans.Projects do
 
   defp md_file_entry(name, subdir),
     do: %{name: name, dir: subdir, rel_path: Path.join(subdir, name)}
+
+  @doc "Generate a VersionStore key for a project file path."
+  @spec version_key(String.t()) :: String.t()
+  def version_key(full_path) do
+    hash =
+      :crypto.hash(:sha256, full_path)
+      |> Base.encode16(case: :lower)
+      |> binary_part(0, 12)
+
+    "project--#{hash}"
+  end
 end

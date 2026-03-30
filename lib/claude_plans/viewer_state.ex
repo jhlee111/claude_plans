@@ -46,11 +46,12 @@ defmodule ClaudePlans.ViewerState do
     [latest, previous | _] = versions
     diff_html = VersionStore.diff(vs.version_key, previous.id, latest.id)
 
-    %{vs |
-      view_mode: :diff,
-      diff_html: diff_html,
-      diff_version_a: previous.id,
-      diff_version_b: latest.id
+    %{
+      vs
+      | view_mode: :diff,
+        diff_html: diff_html,
+        diff_version_a: previous.id,
+        diff_version_b: latest.id
     }
   end
 
@@ -85,10 +86,11 @@ defmodule ClaudePlans.ViewerState do
       direction: ""
     }
 
-    %{vs |
-      annotations: vs.annotations ++ [annotation],
-      annotation_counter: counter,
-      editing_annotation: id
+    %{
+      vs
+      | annotations: vs.annotations ++ [annotation],
+        annotation_counter: counter,
+        editing_annotation: id
     }
   end
 
@@ -120,11 +122,7 @@ defmodule ClaudePlans.ViewerState do
 
   @spec clear_annotations(t()) :: t()
   def clear_annotations(%__MODULE__{} = vs) do
-    %{vs |
-      annotations: [],
-      annotation_counter: 0,
-      editing_annotation: nil
-    }
+    %{vs | annotations: [], annotation_counter: 0, editing_annotation: nil}
   end
 
   @spec write_annotations(t()) :: :ok | :error
@@ -166,10 +164,11 @@ defmodule ClaudePlans.ViewerState do
         VersionStore.snapshot_file(key, path)
         versions = VersionStore.list_versions(key)
 
-        vs = %{vs |
-          html: RenderCache.render(content),
-          versions: versions,
-          has_file_annotations: Annotations.present?(content)
+        vs = %{
+          vs
+          | html: RenderCache.render(content),
+            versions: versions,
+            has_file_annotations: Annotations.present?(content)
         }
 
         if vs.view_mode == :diff and vs.diff_version_a and vs.diff_version_b do

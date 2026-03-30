@@ -97,6 +97,7 @@ defmodule ClaudePlans.Web.Components.SidebarComponents do
       <div :for={file <- @project_files} class="cb-file-row">
         <button
           phx-click="select_file"
+          phx-target="#projects-viewer"
           phx-value-path={file.rel_path}
           class={"cb-file-btn#{if @selected_file == file.rel_path, do: " cb-file-btn--active", else: ""}"}
         >
@@ -296,10 +297,12 @@ defmodule ClaudePlans.Web.Components.SidebarComponents do
 
   defp browse_md_badge({_path, _indices, direct, sub}) do
     total = direct + sub
+
     if total > 0 do
       if sub > 0, do: "#{direct}+#{sub}", else: "#{direct}"
     end
   end
+
   defp browse_md_badge(_), do: nil
 
   defp highlight_match({path, indices, _direct, _sub}), do: highlight_match({path, indices})

@@ -1,11 +1,11 @@
-defmodule ClaudePlans.Web.FoldersViewerComponent do
-  @moduledoc "LiveComponent for viewing folder files with diff, history, and annotations."
+defmodule ClaudePlans.Web.ProjectsViewerComponent do
+  @moduledoc "LiveComponent for viewing project files with diff, history, and annotations."
   use Phoenix.LiveComponent
 
   import ClaudePlans.Web.Components.Helpers, only: [format_version_time: 1, format_bytes: 1]
   import ClaudePlans.Web.Icons
 
-  alias ClaudePlans.{Annotations, Folders, RenderCache, VersionStore, ViewerState}
+  alias ClaudePlans.{Annotations, Projects, RenderCache, VersionStore, ViewerState}
 
   # --- Lifecycle ---
 
@@ -15,29 +15,25 @@ defmodule ClaudePlans.Web.FoldersViewerComponent do
        viewer: %ViewerState{},
        font_size: 16,
        content_highlight: nil,
-       folder_path: nil
+       project_path: nil
      )}
   end
 
-  # update/2: Sequential pipeline — each step runs independently (NOT cond).
-  # When URL params arrive with folder_path + initial_file simultaneously,
-  # both get processed correctly.
-  # One-time assigns (file_updated, keyboard_event) are nil'd after processing.
   def update(new_assigns, socket) do
     old = socket.assigns
 
     socket =
       socket
       |> assign(Map.take(new_assigns, [:id, :font_size, :content_highlight]))
-      # Step 1: folder_path change → reset viewer
+      # Step 1: project_path change → reset viewer
       |> then(fn s ->
-        if changed?(new_assigns, old, :folder_path) do
-          assign(s, folder_path: new_assigns.folder_path, viewer: %ViewerState{})
+        if changed?(new_assigns, old, :project_path) do
+          assign(s, project_path: new_assigns.project_path, viewer: %ViewerState{})
         else
           s
         end
       end)
-      # Step 2: initial_file (runs AFTER Step 1 reset)
+      # Step 2: initial_file
       |> then(fn s ->
         file = new_assigns[:initial_file]
 
@@ -48,25 +44,7 @@ defmodule ClaudePlans.Web.FoldersViewerComponent do
           s
         end
       end)
-      # Step 3: one-time event — file_updated (bridge from BrowserLive)
-      |> then(fn s ->
-        case new_assigns do
-          %{file_updated: {folder_path, filename}} when not is_nil(folder_path) ->
-            s =
-              if s.assigns.folder_path == folder_path and
-                   Path.basename(s.assigns.viewer.selected || "") == filename do
-                refresh_current_file(s)
-              else
-                s
-              end
-
-            assign(s, file_updated: nil)
-
-          _ ->
-            s
-        end
-      end)
-      # Step 4: one-time event — keyboard_event (delegation from BrowserLive)
+      # Step 3: keyboard_event delegation
       |> then(fn s ->
         case new_assigns do
           %{keyboard_event: {event, params}} when not is_nil(event) ->
@@ -87,29 +65,24 @@ defmodule ClaudePlans.Web.FoldersViewerComponent do
 
   # --- Events ---
 
-  # File selection (from sidebar via phx-target="#folders-viewer")
   def handle_event("select_file", %{"path" => rel_path}, socket) do
     socket = load_file(socket, rel_path)
-    send(self(), {:folders_nav_state, rel_path})
+    send(self(), {:projects_nav_state, rel_path})
     {:noreply, socket}
   end
 
-  # Diff toggle
   def handle_event("toggle_diff", _params, socket) do
     {:noreply, update_viewer(socket, &ViewerState.toggle_diff/1)}
   end
 
-  # Version history panel
   def handle_event("toggle_versions", _params, socket) do
     {:noreply, update_viewer(socket, &ViewerState.toggle_versions/1)}
   end
 
-  # Change diff version pair
   def handle_event("select_diff_versions", %{"version_a" => a, "version_b" => b}, socket) do
     {:noreply, update_viewer(socket, &ViewerState.select_diff_versions(&1, a, b))}
   end
 
-  # Annotation events
   def handle_event("toggle_inspector", _params, socket) do
     {:noreply, update_viewer(socket, &ViewerState.toggle_inspector/1)}
   end
@@ -154,14 +127,13 @@ defmodule ClaudePlans.Web.FoldersViewerComponent do
     {:noreply, socket}
   end
 
-  # Catch-all for noop
   def handle_event("noop", _params, socket), do: {:noreply, socket}
 
   # --- Render ---
 
   def render(assigns) do
     ~H"""
-    <div id="folders-viewer">
+    <div id="projects-viewer">
       <div :if={is_nil(@viewer.html)} class="cb-placeholder">
         <div class="cb-placeholder-inner">
           <div class="cb-placeholder-title">Select a file</div>
@@ -201,7 +173,7 @@ defmodule ClaudePlans.Web.FoldersViewerComponent do
             </div>
           </div>
           <div class="cb-display-controls">
-            <button id="theme-toggle-folders" class="cb-theme-toggle" phx-hook="ThemeToggle" phx-update="ignore"><.icon_moon size={14} /></button>
+            <button id="theme-toggle-projects" class="cb-theme-toggle" phx-hook="ThemeToggle" phx-update="ignore"><.icon_moon size={14} /></button>
             <button phx-click="font_size" phx-value-dir="down" class="cb-font-size-btn cb-font-size-btn--sm" title={"Smaller (#{@font_size}px)"}>A</button>
             <span class="cb-font-size-sep">/</span>
             <button phx-click="font_size" phx-value-dir="up" class="cb-font-size-btn cb-font-size-btn--lg" title={"Larger (#{@font_size}px)"}>A</button>
@@ -252,7 +224,7 @@ defmodule ClaudePlans.Web.FoldersViewerComponent do
 
         <div
           :if={@viewer.view_mode == :rendered}
-          id="folder-file-content"
+          id="project-file-content"
           class={"cp-content#{if @viewer.inspector_mode, do: " cb-inspector-active", else: ""}"}
           phx-hook="PlanContent"
           phx-update="replace"
@@ -265,19 +237,18 @@ defmodule ClaudePlans.Web.FoldersViewerComponent do
           {Phoenix.HTML.raw(@viewer.html)}
         </div>
       </div>
-
     </div>
     """
   end
 
   # --- Internal ---
 
-  defp load_file(%{assigns: %{folder_path: nil}} = socket, _rel_path), do: socket
+  defp load_file(%{assigns: %{project_path: nil}} = socket, _rel_path), do: socket
 
   defp load_file(socket, rel_path) do
-    folder_path = socket.assigns.folder_path
-    full_path = Path.join(folder_path, rel_path)
-    version_key = Folders.version_key(full_path)
+    project_path = socket.assigns.project_path
+    full_path = Path.join(project_path, rel_path)
+    version_key = Projects.version_key(full_path)
 
     case File.read(full_path) do
       {:ok, content} ->
@@ -297,22 +268,17 @@ defmodule ClaudePlans.Web.FoldersViewerComponent do
     end
   end
 
-  defp refresh_current_file(socket) do
-    update_viewer(socket, &ViewerState.refresh_on_file_change/1)
-  end
-
   defp update_viewer(socket, fun) do
     viewer = fun.(socket.assigns.viewer)
     notify_annotation_state(socket.assigns.viewer, viewer)
     assign(socket, viewer: viewer)
   end
 
-  # Notify parent when annotation-related state changes, so it can render the panel
   defp notify_annotation_state(old_viewer, new_viewer) do
     if annotation_state_changed?(old_viewer, new_viewer) do
       send(
         self(),
-        {:folders_annotation_state,
+        {:projects_annotation_state,
          %{
            show_annotation_panel: new_viewer.show_annotation_panel,
            inspector_mode: new_viewer.inspector_mode,
@@ -334,9 +300,5 @@ defmodule ClaudePlans.Web.FoldersViewerComponent do
       old.has_file_annotations != new.has_file_annotations
   end
 
-  defp handle_keyboard(socket, _event, _params) do
-    # Keyboard navigation is handled by BrowserLive which manages the file list.
-    # The component just needs to load the file when BrowserLive tells it to via select_file.
-    socket
-  end
+  defp handle_keyboard(socket, _event, _params), do: socket
 end

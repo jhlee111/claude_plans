@@ -18,6 +18,7 @@ defmodule ClaudePlans.Web.BrowserLive do
   alias ClaudePlans.Folders
   alias ClaudePlans.Web.Components.{AnnotationComponents, ContentComponents, SidebarComponents}
   alias ClaudePlans.Web.FoldersViewerComponent
+  alias ClaudePlans.Web.ProjectsViewerComponent
 
   @impl true
   def mount(_params, _session, socket) do
@@ -51,8 +52,9 @@ defmodule ClaudePlans.Web.BrowserLive do
        selected_project: nil,
        project_files: [],
        selected_file: nil,
-       file_html: nil,
+       url_project_file: nil,
        projects_dir: projects_dir,
+       project_annotation_state: nil,
        search_query: "",
        search_results: [],
        content_highlight: nil,
@@ -172,7 +174,7 @@ defmodule ClaudePlans.Web.BrowserLive do
   defp apply_file_change(socket, file)
        when is_binary(file) and file != "" do
     if file != socket.assigns.selected_file and socket.assigns.selected_project do
-      load_file_state(socket, file)
+      assign(socket, selected_file: file, url_project_file: file)
     else
       socket
     end
@@ -258,10 +260,6 @@ defmodule ClaudePlans.Web.BrowserLive do
      push_patch(socket,
        to: UrlParams.build(socket.assigns, %{tab: :projects, project: dir_name, file: nil})
      )}
-  end
-
-  def handle_event("select_file", %{"path" => rel_path}, socket) do
-    {:noreply, push_patch(socket, to: UrlParams.build(socket.assigns, %{file: rel_path}))}
   end
 
   # --- Search ---
@@ -835,6 +833,14 @@ defmodule ClaudePlans.Web.BrowserLive do
     {:noreply, assign(socket, folder_annotation_state: state)}
   end
 
+  def handle_info({:projects_nav_state, selected}, socket) do
+    {:noreply, assign(socket, selected_file: selected, url_project_file: selected)}
+  end
+
+  def handle_info({:projects_annotation_state, state}, socket) do
+    {:noreply, assign(socket, project_annotation_state: state)}
+  end
+
   def handle_info({:folder_file_updated, folder_path, filename}, socket) do
     send_update(FoldersViewerComponent,
       id: "folders-viewer",
@@ -864,10 +870,6 @@ defmodule ClaudePlans.Web.BrowserLive do
             </span>
           </button>
           <button phx-click="kb_help" class="cb-help-btn" title="Keyboard shortcuts"><.icon_help size={14} /></button>
-          <button id="theme-toggle" class="cb-theme-toggle" phx-hook="ThemeToggle" phx-update="ignore"><.icon_moon size={14} /></button>
-          <button phx-click="font_size" phx-value-dir="down" class="cb-font-size-btn cb-font-size-btn--sm" title={"Smaller (current: #{@font_size}px)"}>A</button>
-          <span class="cb-font-size-sep">/</span>
-          <button phx-click="font_size" phx-value-dir="up" class="cb-font-size-btn cb-font-size-btn--lg" title={"Larger (current: #{@font_size}px)"}>A</button>
         </div>
         <div class="cb-sidebar-body">
           <div class="cb-search-wrap">
@@ -900,7 +902,15 @@ defmodule ClaudePlans.Web.BrowserLive do
       <div class="cb-main">
         <%= case @active_tab do %>
           <% :plans -> %><ContentComponents.plans_content {assigns} />
-          <% :projects -> %><ContentComponents.projects_content {assigns} />
+          <% :projects -> %>
+            <.live_component
+              module={ProjectsViewerComponent}
+              id="projects-viewer"
+              font_size={@font_size}
+              content_highlight={@content_highlight}
+              project_path={current_project_path(assigns)}
+              initial_file={@url_project_file}
+            />
           <% :folders -> %>
             <.live_component
               module={FoldersViewerComponent}
@@ -915,7 +925,10 @@ defmodule ClaudePlans.Web.BrowserLive do
       </div>
       <AnnotationComponents.annotation_panel :if={@active_tab == :plans} {assigns} />
       <%= if @active_tab == :folders && @folder_annotation_state && @folder_annotation_state.show_annotation_panel do %>
-        <.folders_annotation_panel state={@folder_annotation_state} />
+        <.component_annotation_panel state={@folder_annotation_state} target="#folders-viewer" prefix="folder" />
+      <% end %>
+      <%= if @active_tab == :projects && @project_annotation_state && @project_annotation_state.show_annotation_panel do %>
+        <.component_annotation_panel state={@project_annotation_state} target="#projects-viewer" prefix="project" />
       <% end %>
       <AnnotationComponents.help_modal {assigns} />
     </div>
@@ -1122,8 +1135,12 @@ defmodule ClaudePlans.Web.BrowserLive do
          )}
 
       :projects ->
-        {:noreply,
-         push_patch(socket, to: UrlParams.build(socket.assigns, %{file: item.rel_path}))}
+        send_update(ProjectsViewerComponent,
+          id: "projects-viewer",
+          initial_file: item.rel_path
+        )
+
+        {:noreply, assign(socket, selected_file: item.rel_path)}
 
       :folders ->
         # Send file selection to the LiveComponent via send_update
@@ -1184,26 +1201,18 @@ defmodule ClaudePlans.Web.BrowserLive do
         socket
       end
 
-    full_path = Path.join([socket.assigns.projects_dir, proj, rel])
-
-    case File.read(full_path) do
-      {:ok, content} ->
-        {:noreply,
-         socket
-         |> assign(
-           active_tab: :projects,
-           selected_file: rel,
-           file_html: RenderCache.render(content),
-           content_highlight: highlight
-         )
-         |> push_patch(
-           to: UrlParams.build(socket.assigns, %{tab: :projects, project: proj, file: rel}),
-           replace: true
-         )}
-
-      {:error, _} ->
-        {:noreply, socket}
-    end
+    {:noreply,
+     socket
+     |> assign(
+       active_tab: :projects,
+       selected_file: rel,
+       url_project_file: rel,
+       content_highlight: highlight
+     )
+     |> push_patch(
+       to: UrlParams.build(socket.assigns, %{tab: :projects, project: proj, file: rel}),
+       replace: true
+     )}
   end
 
   defp search_result_paths(results, projects_dir) do
@@ -1219,7 +1228,7 @@ defmodule ClaudePlans.Web.BrowserLive do
   defp load_project(socket, dir_name) do
     projects_dir = socket.assigns.projects_dir
     files = Projects.list_files(projects_dir, dir_name)
-    {selected_file, file_html} = load_first_file(projects_dir, dir_name, files)
+    first_file = if files != [], do: hd(files).rel_path
 
     # Pre-render all project files in background
     all_paths = Enum.map(files, &Path.join([projects_dir, dir_name, &1.rel_path]))
@@ -1228,8 +1237,9 @@ defmodule ClaudePlans.Web.BrowserLive do
     assign(socket,
       selected_project: dir_name,
       project_files: files,
-      selected_file: selected_file,
-      file_html: file_html
+      selected_file: first_file,
+      url_project_file: first_file,
+      project_annotation_state: nil
     )
   end
 
@@ -1261,22 +1271,11 @@ defmodule ClaudePlans.Web.BrowserLive do
   defp after_delete(:projects, socket) do
     %{projects_dir: dir, selected_project: project} = socket.assigns
     files = Projects.list_files(dir, project)
-    {selected_file, file_html} = load_first_file(dir, project, files)
-    assign(socket, project_files: files, selected_file: selected_file, file_html: file_html)
+    first_file = if files != [], do: hd(files).rel_path
+    assign(socket, project_files: files, selected_file: first_file, url_project_file: first_file)
   end
 
   defp after_delete(_tab, socket), do: socket
-
-  defp load_first_file(_projects_dir, _project, []), do: {nil, nil}
-
-  defp load_first_file(projects_dir, project, [first | _]) do
-    full = Path.join([projects_dir, project, first.rel_path])
-
-    case File.read(full) do
-      {:ok, content} -> {first.rel_path, RenderCache.render(content)}
-      {:error, _} -> {first.rel_path, nil}
-    end
-  end
 
   defp reset_annotation_assigns(socket, content) do
     assign(socket,
@@ -1396,29 +1395,6 @@ defmodule ClaudePlans.Web.BrowserLive do
     end
   end
 
-  defp load_file_state(socket, rel_path) do
-    full_path =
-      Path.join([socket.assigns.projects_dir, socket.assigns.selected_project, rel_path])
-
-    case File.read(full_path) do
-      {:ok, content} ->
-        project_files = socket.assigns.project_files
-        idx = Enum.find_index(project_files, &(&1.rel_path == rel_path)) || 0
-        base = Path.join(socket.assigns.projects_dir, socket.assigns.selected_project)
-        nearby_paths = Enum.map(project_files, &Path.join(base, &1.rel_path))
-        RenderCache.prerender_nearby(nearby_paths, idx)
-
-        assign(socket,
-          selected_file: rel_path,
-          file_html: RenderCache.render(content),
-          content_highlight: nil
-        )
-
-      {:error, _} ->
-        socket
-    end
-  end
-
   # --- Custom Folders helpers ---
 
   defp load_custom_folder(socket, folder_id) do
@@ -1437,6 +1413,13 @@ defmodule ClaudePlans.Web.BrowserLive do
     end
   end
 
+  defp current_project_path(assigns) do
+    case assigns[:selected_project] do
+      nil -> nil
+      project -> Path.join(assigns.projects_dir, project)
+    end
+  end
+
   defp current_folder_path(assigns) do
     case assigns[:selected_custom_folder] do
       nil ->
@@ -1449,7 +1432,6 @@ defmodule ClaudePlans.Web.BrowserLive do
         end
     end
   end
-
 
   defp list_subdirs(path) do
     case File.ls(path) do
@@ -1466,9 +1448,13 @@ defmodule ClaudePlans.Web.BrowserLive do
     end
   end
 
-  # Annotation panel for Folders tab — rendered at cb-layout level as flex sibling
-  # Events target the FoldersViewerComponent via phx-target="#folders-viewer"
-  defp folders_annotation_panel(assigns) do
+  # Reusable annotation panel for LiveComponent-based tabs (Folders, Projects)
+  # Events target the component via phx-target={@target}, IDs are prefixed with @prefix
+  attr :state, :map, required: true
+  attr :target, :string, required: true
+  attr :prefix, :string, required: true
+
+  defp component_annotation_panel(assigns) do
     state = assigns.state
 
     assigns =
@@ -1484,22 +1470,22 @@ defmodule ClaudePlans.Web.BrowserLive do
       <div class="cb-annotation-header">
         <span class="cb-section-label">Annotations</span>
         <span :if={@annotations != []} class="cb-count">({length(@annotations)})</span>
-        <button :if={@annotations != []} phx-click="clear_annotations" phx-target="#folders-viewer" class="cb-annotation-clear">Clear all</button>
+        <button :if={@annotations != []} phx-click="clear_annotations" phx-target={@target} class="cb-annotation-clear">Clear all</button>
       </div>
       <div class="cb-annotation-body">
         <div :if={@annotations == []} class="cb-annotation-empty">
           Click any block to annotate it
         </div>
-        <div :for={ann <- @annotations} class="cb-annotation-card" id={"folder-ann-#{ann.id}"}>
+        <div :for={ann <- @annotations} class="cb-annotation-card" id={"#{@prefix}-ann-#{ann.id}"}>
           <div class="cb-annotation-card-header">
             <span class="cb-annotation-label">{ann.id}</span>
-            <button phx-click="remove_annotation" phx-value-id={ann.id} phx-target="#folders-viewer" class="cb-annotation-remove" title="Remove">&times;</button>
+            <button phx-click="remove_annotation" phx-value-id={ann.id} phx-target={@target} class="cb-annotation-remove" title="Remove">&times;</button>
           </div>
           <div class="cb-annotation-ref">{ann.block_path}</div>
           <%= if @editing_annotation == ann.id do %>
-            <form phx-change="update_annotation" phx-value-id={ann.id} phx-target="#folders-viewer">
+            <form phx-change="update_annotation" phx-value-id={ann.id} phx-target={@target}>
               <textarea
-                id={"folder-ann-input-#{ann.id}"}
+                id={"#{@prefix}-ann-input-#{ann.id}"}
                 name="direction"
                 class="cb-annotation-input"
                 placeholder="What should change?"
@@ -1507,12 +1493,12 @@ defmodule ClaudePlans.Web.BrowserLive do
                 phx-debounce="300"
               >{ann.direction}</textarea>
             </form>
-            <button phx-click="save_annotation" phx-value-id={ann.id} phx-target="#folders-viewer" class="cb-annotation-save">Save</button>
+            <button phx-click="save_annotation" phx-value-id={ann.id} phx-target={@target} class="cb-annotation-save">Save</button>
           <% else %>
             <div
               phx-click="edit_annotation"
               phx-value-id={ann.id}
-              phx-target="#folders-viewer"
+              phx-target={@target}
               class={"cb-annotation-display#{if ann.direction == "", do: " cb-annotation-display--empty", else: ""}"}
             >
               {if ann.direction == "", do: "Click to add direction...", else: ann.direction}
@@ -1522,7 +1508,7 @@ defmodule ClaudePlans.Web.BrowserLive do
       </div>
       <div :if={@annotations != []} class="cb-annotation-footer">
         <button
-          id="folder-copy-annotations"
+          id={"#{@prefix}-copy-annotations"}
           class="cb-annotation-copy"
           phx-hook="CopyAnnotations"
           data-filename={@selected}
@@ -1531,17 +1517,17 @@ defmodule ClaudePlans.Web.BrowserLive do
           Copy All Annotations
         </button>
         <button
-          id="folder-write-annotations"
+          id={"#{@prefix}-write-annotations"}
           class="cb-annotation-write"
           phx-hook="WriteAnnotations"
           phx-click="write_annotations"
-          phx-target="#folders-viewer"
+          phx-target={@target}
         >
           Write to File
         </button>
       </div>
       <div :if={@annotations == [] && @has_file_annotations} class="cb-annotation-footer">
-        <button phx-click="strip_annotations" phx-target="#folders-viewer" class="cb-annotation-strip">
+        <button phx-click="strip_annotations" phx-target={@target} class="cb-annotation-strip">
           Strip Annotations from File
         </button>
       </div>
