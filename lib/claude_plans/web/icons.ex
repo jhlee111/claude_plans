@@ -87,6 +87,17 @@ defmodule ClaudePlans.Web.Icons do
   attr :size, :integer, default: 16
   attr :class, :string, default: ""
 
+  def icon_columns(assigns) do
+    ~H"""
+    <.svg size={@size} class={@class}>
+      <rect width="18" height="18" x="3" y="3" rx="2" ry="2" /><line x1="12" x2="12" y1="3" y2="21" />
+    </.svg>
+    """
+  end
+
+  attr :size, :integer, default: 16
+  attr :class, :string, default: ""
+
   def icon_x(assigns) do
     ~H"""
     <.svg size={@size} class={@class}>

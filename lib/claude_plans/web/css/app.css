@@ -251,6 +251,39 @@ body {
   max-width: 72rem;
   margin: 0 auto;
 }
+.cb-content-wrap--narrow {
+  max-width: 56rem;
+}
+.cb-width-toggle {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: #94a3b8;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+}
+.cb-width-toggle:hover {
+  background: #f1f5f9;
+  color: #475569;
+}
+.cb-width-toggle--active {
+  color: #4338ca;
+  background: rgba(99, 102, 241, 0.08);
+}
+[data-theme="dark"] .cb-width-toggle:hover {
+  background: #1e293b;
+  color: #94a3b8;
+}
+[data-theme="dark"] .cb-width-toggle--active {
+  color: #818cf8;
+  background: rgba(129, 140, 248, 0.1);
+}
 
 /* ================================================
    Markdown content styles (VitePress-inspired)

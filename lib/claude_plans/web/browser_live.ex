@@ -28,14 +28,25 @@ defmodule ClaudePlans.Web.BrowserLive do
       {:ok, _} = Registry.register(ClaudePlans.Registry, :folder_updates, [])
     end
 
-    font_size =
+    {font_size, content_width} =
       if connected?(socket) do
-        case get_connect_params(socket) do
-          %{"font_size" => size} when is_integer(size) and size >= 10 and size <= 28 -> size
-          _ -> 16
-        end
+        params = get_connect_params(socket)
+
+        fs =
+          case params do
+            %{"font_size" => size} when is_integer(size) and size >= 10 and size <= 28 -> size
+            _ -> 16
+          end
+
+        cw =
+          case params do
+            %{"content_width" => w} when w in ["narrow", "wide"] -> w
+            _ -> "wide"
+          end
+
+        {fs, cw}
       else
-        16
+        {16, "wide"}
       end
 
     plans = Watcher.list_plans()
@@ -66,6 +77,7 @@ defmodule ClaudePlans.Web.BrowserLive do
        diff_version_b: nil,
        show_versions: false,
        font_size: font_size,
+       content_width: content_width,
        activity_events: ActivityFeed.list_events(),
        unseen_activity_count: 0,
        unchecked_plan_files: VersionStore.unchecked_files(),
@@ -400,6 +412,15 @@ defmodule ClaudePlans.Web.BrowserLive do
   def handle_event("font_size", %{"dir" => "reset"}, socket) do
     {:noreply,
      socket |> assign(font_size: 16) |> push_event("save_preferences", %{font_size: 16})}
+  end
+
+  def handle_event("toggle_width", _params, socket) do
+    new_width = if socket.assigns.content_width == "wide", do: "narrow", else: "wide"
+
+    {:noreply,
+     socket
+     |> assign(content_width: new_width)
+     |> push_event("save_preferences", %{content_width: new_width})}
   end
 
   def handle_event("select_activity_event", %{"index" => idx_str}, socket) do
@@ -907,6 +928,7 @@ defmodule ClaudePlans.Web.BrowserLive do
               module={ProjectsViewerComponent}
               id="projects-viewer"
               font_size={@font_size}
+              content_width={@content_width}
               content_highlight={@content_highlight}
               project_path={current_project_path(assigns)}
               initial_file={@url_project_file}
@@ -916,6 +938,7 @@ defmodule ClaudePlans.Web.BrowserLive do
               module={FoldersViewerComponent}
               id="folders-viewer"
               font_size={@font_size}
+              content_width={@content_width}
               content_highlight={@content_highlight}
               folder_path={current_folder_path(assigns)}
               initial_file={@url_folder_file}

@@ -14,6 +14,7 @@ defmodule ClaudePlans.Web.FoldersViewerComponent do
      assign(socket,
        viewer: %ViewerState{},
        font_size: 16,
+       content_width: "wide",
        content_highlight: nil,
        folder_path: nil
      )}
@@ -28,7 +29,7 @@ defmodule ClaudePlans.Web.FoldersViewerComponent do
 
     socket =
       socket
-      |> assign(Map.take(new_assigns, [:id, :font_size, :content_highlight]))
+      |> assign(Map.take(new_assigns, [:id, :font_size, :content_width, :content_highlight]))
       # Step 1: folder_path change → reset viewer
       |> then(fn s ->
         if changed?(new_assigns, old, :folder_path) do
@@ -169,7 +170,7 @@ defmodule ClaudePlans.Web.FoldersViewerComponent do
         </div>
       </div>
 
-      <div :if={@viewer.html} class="cb-content-wrap">
+      <div :if={@viewer.html} class={"cb-content-wrap#{if @content_width == "narrow", do: " cb-content-wrap--narrow", else: ""}"}>
         <div class="cb-content-toolbar">
           <div class="cb-toolbar-left">
             <div class="cb-file-header">{@viewer.selected}</div>
@@ -201,6 +202,7 @@ defmodule ClaudePlans.Web.FoldersViewerComponent do
             </div>
           </div>
           <div class="cb-display-controls">
+            <button phx-click="toggle_width" class={"cb-width-toggle#{if @content_width == "narrow", do: " cb-width-toggle--active", else: ""}"} title={"Content width: #{@content_width}"}><.icon_columns size={14} /></button>
             <button id="theme-toggle-folders" class="cb-theme-toggle" phx-hook="ThemeToggle" phx-update="ignore"><.icon_moon size={14} /></button>
             <button phx-click="font_size" phx-value-dir="down" class="cb-font-size-btn cb-font-size-btn--sm" title={"Smaller (#{@font_size}px)"}>A</button>
             <span class="cb-font-size-sep">/</span>
