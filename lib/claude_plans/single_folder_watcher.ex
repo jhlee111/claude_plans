@@ -56,6 +56,8 @@ defmodule ClaudePlans.SingleFolderWatcher do
           do: send(pid, {:folder_file_updated, state.path, file_path})
     end)
 
+    ClaudePlans.ActivityFeed.record_folder_event(state.path, file_path)
+
     {:noreply, %{state | debounce_timers: Debounce.clear(state.debounce_timers, file_path)}}
   end
 

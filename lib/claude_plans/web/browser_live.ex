@@ -466,6 +466,23 @@ defmodule ClaudePlans.Web.BrowserLive do
              UrlParams.build(socket.assigns, %{tab: :projects, project: project, file: rel_path})
          )}
 
+      %{category: :folder, path: file_path} ->
+        case find_folder_for_path(socket.assigns.custom_folders, file_path) do
+          {folder, rel} ->
+            {:noreply,
+             push_patch(socket,
+               to:
+                 UrlParams.build(socket.assigns, %{
+                   tab: :folders,
+                   folder: folder.id,
+                   folder_file: rel
+                 })
+             )}
+
+          nil ->
+            {:noreply, socket}
+        end
+
       _ ->
         {:noreply, socket}
     end
@@ -1495,6 +1512,14 @@ defmodule ClaudePlans.Web.BrowserLive do
           folder -> folder.path
         end
     end
+  end
+
+  defp find_folder_for_path(folders, file_path) do
+    Enum.find_value(folders, fn folder ->
+      if String.starts_with?(file_path, folder.path <> "/") do
+        {folder, Path.relative_to(file_path, folder.path)}
+      end
+    end)
   end
 
   defp list_subdirs(path) do
