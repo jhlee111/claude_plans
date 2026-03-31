@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.2] - 2026-03-31
+
+### Added
+- **Keyboard shortcuts on all tabs** — `d` (diff), `v` (versions), `a` (annotate) shortcuts now work on Projects and Folders tabs, not just Plans
+
+### Fixed
+- Help modal now shows all 4 tab shortcuts (`1 2 3 4`) — Folders tab was missing
+- Help modal has a close button and proper dialog semantics (`role="dialog"`, `aria-modal`)
+- Destructive annotation actions (Clear all, Write to File, Strip) now require confirmation before executing
+- Light mode text contrast improved (`#94a3b8` → `#64748b`) to meet WCAG AA accessibility standard
+- Page title changed from "Claude Browser" to "Claude Plans"
+- Delete confirmation dialogs now show the filename instead of the full absolute path
+- All decorative SVG icons now have `aria-hidden="true"` for screen readers
+
 ## [0.9.1] - 2026-03-30
 
 ### Added
