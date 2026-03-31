@@ -336,6 +336,15 @@ defmodule ClaudePlans.Web.FoldersViewerComponent do
       old.has_file_annotations != new.has_file_annotations
   end
 
+  defp handle_keyboard(socket, "toggle_diff", _params),
+    do: update_viewer(socket, &ViewerState.toggle_diff/1)
+
+  defp handle_keyboard(socket, "toggle_versions", _params),
+    do: update_viewer(socket, &ViewerState.toggle_versions/1)
+
+  defp handle_keyboard(socket, "toggle_inspector", _params),
+    do: update_viewer(socket, &ViewerState.toggle_inspector/1)
+
   defp handle_keyboard(socket, _event, _params) do
     # Keyboard navigation is handled by BrowserLive which manages the file list.
     # The component just needs to load the file when BrowserLive tells it to via select_file.

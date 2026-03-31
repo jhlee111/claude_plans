@@ -307,6 +307,21 @@ defmodule ClaudePlans.Web.BrowserLive do
 
   # --- Diff / Version History ---
 
+  # Forward toggle events to the active component when not on Plans tab
+  def handle_event(event, _params, socket)
+      when event in ["toggle_diff", "toggle_versions", "toggle_inspector"] and
+             socket.assigns.active_tab in [:projects, :folders] do
+    component =
+      case socket.assigns.active_tab do
+        :projects -> {ClaudePlans.Web.ProjectsViewerComponent, "projects-viewer"}
+        :folders -> {ClaudePlans.Web.FoldersViewerComponent, "folders-viewer"}
+      end
+
+    {module, id} = component
+    send_update(module, id: id, keyboard_event: {event, %{}})
+    {:noreply, socket}
+  end
+
   def handle_event("toggle_diff", _params, socket) do
     case socket.assigns.view_mode do
       :rendered when length(socket.assigns.versions) >= 2 ->

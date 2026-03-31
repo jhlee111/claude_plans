@@ -23,6 +23,7 @@ defmodule ClaudePlans.Web.Icons do
       stroke-linecap="round"
       stroke-linejoin="round"
       class={@class}
+      aria-hidden="true"
     >
       {render_slot(@inner_block)}
     </svg>
