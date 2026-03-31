@@ -324,5 +324,14 @@ defmodule ClaudePlans.Web.ProjectsViewerComponent do
       old.has_file_annotations != new.has_file_annotations
   end
 
+  defp handle_keyboard(socket, "toggle_diff", _params),
+    do: update_viewer(socket, &ViewerState.toggle_diff/1)
+
+  defp handle_keyboard(socket, "toggle_versions", _params),
+    do: update_viewer(socket, &ViewerState.toggle_versions/1)
+
+  defp handle_keyboard(socket, "toggle_inspector", _params),
+    do: update_viewer(socket, &ViewerState.toggle_inspector/1)
+
   defp handle_keyboard(socket, _event, _params), do: socket
 end
