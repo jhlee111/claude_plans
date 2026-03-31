@@ -56,7 +56,7 @@ defmodule ClaudePlans.Web.Components.SidebarComponents do
         <button
           phx-click="delete_file"
           phx-value-path={plan.path}
-          data-confirm={"Delete #{plan.path}?"}
+          data-confirm={"Delete #{Path.basename(plan.path)}? This cannot be undone."}
           class="cb-action-btn cb-action-btn--danger"
           title="Delete file"
         ><.icon_trash size={12} /></button>
@@ -122,7 +122,7 @@ defmodule ClaudePlans.Web.Components.SidebarComponents do
           <button
             phx-click="delete_file"
             phx-value-path={file_paths[file.rel_path]}
-            data-confirm={"Delete #{file_paths[file.rel_path]}?"}
+            data-confirm={"Delete #{file.rel_path}? This cannot be undone."}
             class="cb-action-btn cb-action-btn--danger"
             title="Delete file"
           ><.icon_trash size={12} /></button>
