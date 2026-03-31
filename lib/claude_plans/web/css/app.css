@@ -79,7 +79,7 @@ body {
   border: none;
   background: none;
   cursor: pointer;
-  color: #94a3b8;
+  color: #64748b;
   font-size: 1rem;
   border-radius: 6px;
   display: flex;
@@ -104,14 +104,14 @@ body {
 .cb-section-label {
   font-size: 0.65rem;
   font-weight: 600;
-  color: #94a3b8;
+  color: #64748b;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-bottom: 0.5rem;
 }
 .cb-count {
   font-size: 0.65rem;
-  color: #94a3b8;
+  color: #64748b;
 }
 
 /* File list buttons */
@@ -150,11 +150,11 @@ body {
 }
 .cb-file-time {
   font-size: 0.625rem;
-  color: #94a3b8;
+  color: #64748b;
   margin-top: 2px;
 }
 .cb-file-dir {
-  color: #94a3b8;
+  color: #64748b;
 }
 /* File action buttons (copy, edit, delete) */
 .cb-file-actions {
@@ -173,7 +173,7 @@ body {
 }
 .cb-action-btn {
   font-size: 0.5625rem;
-  color: #94a3b8;
+  color: #64748b;
   background: #f1f5f9;
   border: 1px solid #e2e8f0;
   border-radius: 4px;
@@ -214,7 +214,7 @@ body {
 .cb-empty {
   text-align: center;
   padding: 2rem 0;
-  color: #94a3b8;
+  color: #64748b;
   font-size: 0.8125rem;
 }
 .cb-empty-hint {
@@ -229,7 +229,7 @@ body {
 }
 .cb-placeholder-inner {
   text-align: center;
-  color: #94a3b8;
+  color: #64748b;
 }
 .cb-placeholder-title {
   font-size: 1.125rem;
@@ -261,7 +261,7 @@ body {
   border: none;
   background: none;
   cursor: pointer;
-  color: #94a3b8;
+  color: #64748b;
   border-radius: 6px;
   display: flex;
   align-items: center;
@@ -612,7 +612,7 @@ body {
 .cb-folder-back-btn:hover {
   background: #e2e8f0;
   color: #1e293b;
-  border-color: #94a3b8;
+  border-color: #64748b;
 }
 .cb-folder-breadcrumb-path {
   display: flex;
@@ -770,7 +770,7 @@ body {
   border-color: #6366f1;
 }
 .cb-search-input::placeholder {
-  color: #94a3b8;
+  color: #64748b;
 }
 .cb-search-clear {
   position: absolute;
@@ -780,7 +780,7 @@ body {
   border: none;
   background: none;
   cursor: pointer;
-  color: #94a3b8;
+  color: #64748b;
   font-size: 1rem;
   line-height: 1;
   padding: 0;
@@ -792,7 +792,7 @@ body {
 /* Search results */
 .cb-search-source {
   font-size: 0.5625rem;
-  color: #94a3b8;
+  color: #64748b;
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
@@ -805,7 +805,7 @@ body {
   white-space: nowrap;
 }
 .cb-match-line {
-  color: #94a3b8;
+  color: #64748b;
   font-family: "SF Mono", Monaco, monospace;
   font-size: 0.625rem;
 }
@@ -871,7 +871,7 @@ body {
   border: none;
   background: none;
   cursor: pointer;
-  color: #94a3b8;
+  color: #64748b;
   font-size: 0.625rem;
   display: flex;
   align-items: center;
@@ -891,7 +891,7 @@ body {
   font-family: "SF Mono", Monaco, monospace;
   background: rgba(0, 0, 0, 0.06);
   border-radius: 3px;
-  color: #94a3b8;
+  color: #64748b;
   margin-left: 3px;
   line-height: 1.4;
   vertical-align: middle;
@@ -901,7 +901,7 @@ body {
   border: none;
   background: none;
   cursor: pointer;
-  color: #94a3b8;
+  color: #64748b;
   font-size: 0.6875rem;
   padding: 0 4px;
   margin-right: 2px;
@@ -929,11 +929,30 @@ body {
   width: 90%;
   box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
 }
+.cb-help-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
 .cb-help-title {
   font-size: 0.9375rem;
   font-weight: 600;
-  margin-bottom: 1rem;
   color: #1a1a1a;
+}
+.cb-help-close {
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  cursor: pointer;
+  color: #64748b;
+  padding: 0.25rem;
+  line-height: 1;
+  border-radius: 4px;
+}
+.cb-help-close:hover {
+  color: #1a1a1a;
+  background: #f1f5f9;
 }
 .cb-help-grid {
   display: grid;
@@ -952,7 +971,7 @@ body {
   text-align: center;
   margin-top: 1rem;
   font-size: 0.6875rem;
-  color: #94a3b8;
+  color: #64748b;
 }
 kbd {
   display: inline-block;
@@ -1039,6 +1058,13 @@ kbd {
 [data-theme="dark"] .cb-help-title {
   color: #e2e8f0;
 }
+[data-theme="dark"] .cb-help-close {
+  color: #94a3b8;
+}
+[data-theme="dark"] .cb-help-close:hover {
+  color: #e2e8f0;
+  background: #334155;
+}
 [data-theme="dark"] .cb-help-grid dd {
   color: #94a3b8;
 }
@@ -1103,7 +1129,7 @@ kbd {
   border: none;
   background: none;
   cursor: pointer;
-  color: #94a3b8;
+  color: #64748b;
   font-weight: 700;
   padding: 0 2px;
   border-radius: 4px;
@@ -1183,11 +1209,11 @@ kbd {
   font-weight: 500;
 }
 .cb-version-size {
-  color: #94a3b8;
+  color: #64748b;
   font-size: 0.6875rem;
 }
 .cb-version-id {
-  color: #94a3b8;
+  color: #64748b;
   font-family: "SF Mono", Monaco, monospace;
   font-size: 0.625rem;
 }
@@ -1232,7 +1258,7 @@ kbd {
   width: 3.5rem;
   text-align: right;
   padding: 0 0.5rem;
-  color: #94a3b8;
+  color: #64748b;
   font-size: 0.6875rem;
   flex-shrink: 0;
   user-select: none;
@@ -1385,7 +1411,7 @@ kbd {
   border: none;
   background: none;
   cursor: pointer;
-  color: #94a3b8;
+  color: #64748b;
   font-size: 1rem;
   font-weight: 600;
   border-radius: 0.25rem;
@@ -1453,11 +1479,11 @@ kbd {
   font-size: 0.5625rem;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  color: #94a3b8;
+  color: #64748b;
 }
 .cb-activity-time {
   font-size: 0.5625rem;
-  color: #94a3b8;
+  color: #64748b;
 }
 .cb-activity-project {
   font-size: 0.5625rem;
@@ -1555,7 +1581,7 @@ kbd {
 }
 .cb-annotation-clear {
   font-size: 0.625rem;
-  color: #94a3b8;
+  color: #64748b;
   background: none;
   border: none;
   cursor: pointer;
@@ -1571,7 +1597,7 @@ kbd {
 }
 .cb-annotation-empty {
   font-size: 0.75rem;
-  color: #94a3b8;
+  color: #64748b;
   text-align: center;
   padding: 2rem 0.5rem;
 }
@@ -1632,13 +1658,13 @@ kbd {
   border-color: #6366f1;
 }
 .cb-annotation-input::placeholder {
-  color: #94a3b8;
+  color: #64748b;
 }
 .cb-annotation-remove {
   border: none;
   background: none;
   cursor: pointer;
-  color: #94a3b8;
+  color: #64748b;
   font-size: 1.125rem;
   line-height: 1;
   padding: 0;
@@ -1662,7 +1688,7 @@ kbd {
   border-color: #e2e8f0;
 }
 .cb-annotation-display--empty {
-  color: #94a3b8;
+  color: #64748b;
   font-style: italic;
 }
 .cb-annotation-save {

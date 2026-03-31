@@ -8,7 +8,7 @@ defmodule ClaudePlans.Web.Components.AnnotationComponents do
       <div class="cb-annotation-header">
         <span class="cb-section-label">Annotations</span>
         <span :if={@annotations != []} class="cb-count">({length(@annotations)})</span>
-        <button :if={@annotations != []} phx-click="clear_annotations" class="cb-annotation-clear">Clear all</button>
+        <button :if={@annotations != []} phx-click="clear_annotations" class="cb-annotation-clear" data-confirm="Clear all annotations?">Clear all</button>
       </div>
       <div class="cb-annotation-body">
         <div :if={@annotations == []} class="cb-annotation-empty">
@@ -47,12 +47,12 @@ defmodule ClaudePlans.Web.Components.AnnotationComponents do
         <button id="copy-annotations" class="cb-annotation-copy" phx-hook="CopyAnnotations" data-filename={@selected} data-annotations={Jason.encode!(@annotations)}>
           Copy All Annotations
         </button>
-        <button id="write-annotations" class="cb-annotation-write" phx-hook="WriteAnnotations" phx-click="write_annotations_to_file">
+        <button id="write-annotations" class="cb-annotation-write" phx-hook="WriteAnnotations" phx-click="write_annotations_to_file" data-confirm="Write annotations to the plan file? This will modify the file on disk.">
           Write to Plan File
         </button>
       </div>
       <div :if={@annotations == [] && @has_file_annotations} class="cb-annotation-footer">
-        <button phx-click="strip_annotations_from_file" class="cb-annotation-strip">
+        <button phx-click="strip_annotations_from_file" class="cb-annotation-strip" data-confirm="Remove all annotations from the file? This will modify the file on disk.">
           Strip Annotations from File
         </button>
       </div>
@@ -62,9 +62,12 @@ defmodule ClaudePlans.Web.Components.AnnotationComponents do
 
   def help_modal(assigns) do
     ~H"""
-    <div :if={@show_help} class="cb-help-overlay" phx-click="kb_help">
+    <div :if={@show_help} class="cb-help-overlay" phx-click="kb_help" role="dialog" aria-modal="true" aria-labelledby="help-modal-title">
       <div class="cb-help-modal" phx-click="noop">
-        <div class="cb-help-title">Keyboard Shortcuts</div>
+        <div class="cb-help-modal-header">
+          <div class="cb-help-title" id="help-modal-title">Keyboard Shortcuts</div>
+          <button phx-click="kb_help" class="cb-help-close" aria-label="Close">&times;</button>
+        </div>
         <dl class="cb-help-grid">
           <dt><kbd>j</kbd> <kbd>k</kbd></dt><dd>Navigate down / up</dd>
           <dt><kbd>gg</kbd> <kbd>G</kbd></dt><dd>Jump to top / bottom</dd>
@@ -79,7 +82,7 @@ defmodule ClaudePlans.Web.Components.AnnotationComponents do
           <dt><kbd>a</kbd></dt><dd>Toggle annotation inspector</dd>
           <dt><kbd>e</kbd></dt><dd>Open in editor (PLUG_EDITOR)</dd>
           <dt><kbd>x</kbd></dt><dd>Delete selected file</dd>
-          <dt><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></dt><dd>Plans / Projects / Activity tab</dd>
+          <dt><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd></dt><dd>Plans / Projects / Folders / Activity tab</dd>
           <dt><kbd>?</kbd></dt><dd>Toggle this help</dd>
         </dl>
         <div class="cb-help-version">v{Application.spec(:claude_plans, :vsn)}</div>

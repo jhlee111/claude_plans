@@ -36,7 +36,7 @@ defmodule ClaudePlans.Web.Layouts do
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="csrf-token" content={Phoenix.Controller.get_csrf_token()} />
-        <title>Claude Browser</title>
+        <title>Claude Plans</title>
         {raw("<style>" <> @css <> "</style>")}
       </head>
       <body>
