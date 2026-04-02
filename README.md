@@ -24,11 +24,12 @@ A4 (## Data Flow > diagram node A "Member checks in"): Where does this validatio
 ## Features
 
 - **Plans tab** — Browse and read Claude Code plan files with live updates
+- **Projects tab** — Browse project memory files across all Claude Code projects with diff, history, and annotations
+- **Folders tab** — Browse markdown files from any directory on your system with fuzzy directory search, live file watching, and full viewer support
+- **Sort & timestamps** — Sort file lists by name (A-Z/Z-A) or modification time (newest/oldest). All file entries show relative modification time (e.g. "1h ago", "2d ago") with live refresh on file changes
 - **Version history** — Automatic snapshots on each file change with persistent history
 - **Diff view** — Side-by-side line-level diff between any two plan versions with hunk collapsing
 - **Activity feed** — Real-time feed of file changes (creates, updates, deletes) across plans and project memory with inline diff preview and direct navigation
-- **Projects tab** — Browse project memory files across all Claude Code projects with diff, history, and annotations
-- **Folders tab** — Browse markdown files from any directory on your system with fuzzy directory search, live file watching, and full viewer support
 - **Dark / Light mode** — Auto-detects OS preference, toggle with one click, persisted in localStorage
 - **Server-side Markdown** — Rendered via MDEx with GitHub-style syntax highlighting
 - **Mermaid diagrams** — Server-side rendering via MDExMermex (no CDN) with semantic SVG output for node/edge annotation
