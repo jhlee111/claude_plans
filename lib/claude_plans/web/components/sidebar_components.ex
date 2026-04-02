@@ -5,6 +5,44 @@ defmodule ClaudePlans.Web.Components.SidebarComponents do
   import ClaudePlans.Web.Icons
   import ClaudePlans.Web.Components.Helpers
 
+  defp sort_buttons(assigns) do
+    assigns = assign(assigns, :name_title, sort_name_title(assigns.sort_mode))
+    assigns = assign(assigns, :time_title, sort_time_title(assigns.sort_mode))
+
+    ~H"""
+    <div style="display:flex;gap:2px;align-items:center">
+      <button
+        phx-click="cycle_sort"
+        phx-value-field="name"
+        class={"cb-action-btn#{if @sort_mode in [:name_asc, :name_desc], do: " cb-sort-active", else: ""}"}
+        title={@name_title}
+        style="padding:0.15rem 0.25rem"
+      >
+        <.icon_a_up :if={@sort_mode != :name_desc} size={12} />
+        <.icon_a_down :if={@sort_mode == :name_desc} size={12} />
+      </button>
+      <button
+        phx-click="cycle_sort"
+        phx-value-field="modified"
+        class={"cb-action-btn#{if @sort_mode in [:modified_desc, :modified_asc], do: " cb-sort-active", else: ""}"}
+        title={@time_title}
+        style="padding:0.15rem 0.25rem"
+      >
+        <.icon_clock_down :if={@sort_mode != :modified_asc} size={12} />
+        <.icon_clock_up :if={@sort_mode == :modified_asc} size={12} />
+      </button>
+    </div>
+    """
+  end
+
+  defp sort_name_title(:name_asc), do: "Name A→Z (click for Z→A)"
+  defp sort_name_title(:name_desc), do: "Name Z→A (click for A→Z)"
+  defp sort_name_title(_), do: "Sort by name"
+
+  defp sort_time_title(:modified_desc), do: "Newest first (click for oldest)"
+  defp sort_time_title(:modified_asc), do: "Oldest first (click for newest)"
+  defp sort_time_title(_), do: "Sort by modified"
+
   def search_results(assigns) do
     ~H"""
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem">
@@ -35,7 +73,10 @@ defmodule ClaudePlans.Web.Components.SidebarComponents do
     ~H"""
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem">
       <span class="cb-section-label">Plans</span>
-      <span class="cb-count">{length(@plans)}</span>
+      <div style="display:flex;align-items:center;gap:0.5rem">
+        <.sort_buttons sort_mode={@sort_mode} />
+        <span class="cb-count">{length(@plans)}</span>
+      </div>
     </div>
     <% plan_editor_urls = Map.new(@plans, fn p -> {p.filename, editor_url(p.path)} end) %>
     <div :for={plan <- @plans} class="cb-file-row">
@@ -89,7 +130,10 @@ defmodule ClaudePlans.Web.Components.SidebarComponents do
     <div :if={@selected_project}>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem">
         <span class="cb-section-label">Files</span>
-        <span class="cb-count">{length(@project_files)}</span>
+        <div style="display:flex;align-items:center;gap:0.5rem">
+          <.sort_buttons sort_mode={@sort_mode} />
+          <span class="cb-count">{length(@project_files)}</span>
+        </div>
       </div>
       <%
         file_paths = Map.new(@project_files, fn f ->
@@ -107,6 +151,7 @@ defmodule ClaudePlans.Web.Components.SidebarComponents do
           <div class="cb-file-name">
             <span :if={file.dir} class="cb-file-dir">{file.dir}/</span>{file.name}
           </div>
+          <div class="cb-file-time">{format_time(file.modified)}</div>
         </button>
         <div class="cb-file-actions">
           <a
@@ -260,7 +305,10 @@ defmodule ClaudePlans.Web.Components.SidebarComponents do
       <%!-- Markdown files --%>
       <div style="display:flex;align-items:center;justify-content:space-between;margin:0.5rem 0">
         <span class="cb-section-label">Files</span>
-        <span class="cb-count">{length(files)}</span>
+        <div style="display:flex;align-items:center;gap:0.5rem">
+          <.sort_buttons sort_mode={@sort_mode} />
+          <span class="cb-count">{length(files)}</span>
+        </div>
       </div>
       <div :for={file <- files} class="cb-file-row">
         <button
@@ -271,6 +319,7 @@ defmodule ClaudePlans.Web.Components.SidebarComponents do
           class={"cb-file-btn#{if @folder_nav_selected == file.rel_path, do: " cb-file-btn--active", else: ""}"}
         >
           <div class="cb-file-name">{file.name}</div>
+          <div class="cb-file-time">{format_time(file.modified)}</div>
         </button>
         <div class="cb-file-actions">
           <a

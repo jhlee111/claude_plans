@@ -105,7 +105,8 @@ defmodule ClaudePlans.Web.BrowserLive do
        browse_dirs: list_subdirs(System.user_home!()),
        browse_filter: "",
        url_folder_file: nil,
-       folder_annotation_state: nil
+       folder_annotation_state: nil,
+       sort_mode: :modified_desc
      )}
   end
 
@@ -281,6 +282,18 @@ defmodule ClaudePlans.Web.BrowserLive do
       when tab in ~w(plans projects folders activity) do
     {:noreply,
      push_patch(socket, to: UrlParams.build(socket.assigns, %{tab: String.to_existing_atom(tab)}))}
+  end
+
+  def handle_event("cycle_sort", %{"field" => field}, socket) do
+    current = socket.assigns.sort_mode
+    new_mode = next_sort_mode(field, current)
+
+    socket =
+      socket
+      |> assign(sort_mode: new_mode)
+      |> apply_sort()
+
+    {:noreply, socket}
   end
 
   def handle_event("select_plan", %{"filename" => filename}, socket) do
@@ -647,7 +660,7 @@ defmodule ClaudePlans.Web.BrowserLive do
 
   def handle_event("navigate_subfolder", %{"path" => path}, socket) do
     if File.dir?(path) do
-      files = Folders.list_files(path)
+      files = Folders.sort_files(Folders.list_files(path), socket.assigns.sort_mode)
 
       {:noreply,
        assign(socket,
@@ -668,7 +681,7 @@ defmodule ClaudePlans.Web.BrowserLive do
       parent = Path.dirname(current)
       # Don't go above the original folder path
       target = if String.starts_with?(parent, original), do: parent, else: original
-      files = Folders.list_files(target)
+      files = Folders.sort_files(Folders.list_files(target), socket.assigns.sort_mode)
 
       {:noreply,
        assign(socket,
@@ -884,6 +897,7 @@ defmodule ClaudePlans.Web.BrowserLive do
         html: html,
         has_file_annotations: has_annotations
       )
+      |> sort_plans(socket.assigns.sort_mode)
       |> refresh_versions(selected)
 
     {:noreply, assign(socket, unchecked_plan_files: VersionStore.unchecked_files())}
@@ -948,15 +962,21 @@ defmodule ClaudePlans.Web.BrowserLive do
       file_updated: {watched_path, rel}
     )
 
-    # Forward to Projects tab component if the watched path matches the active project
+    # Forward to Projects tab component and refresh project file list if the watched path matches
     project_path = current_project_path(socket.assigns)
 
-    if project_path && watched_path == project_path do
-      send_update(ProjectsViewerComponent,
-        id: "projects-viewer",
-        file_updated: {watched_path, rel}
-      )
-    end
+    socket =
+      if project_path && watched_path == project_path do
+        send_update(ProjectsViewerComponent,
+          id: "projects-viewer",
+          file_updated: {watched_path, rel}
+        )
+
+        files = Projects.list_files(socket.assigns.projects_dir, socket.assigns.selected_project)
+        assign(socket, project_files: Projects.sort_files(files, socket.assigns.sort_mode))
+      else
+        socket
+      end
 
     # Refresh sidebar file list if the change is within the currently visible folder
     socket =
@@ -965,7 +985,7 @@ defmodule ClaudePlans.Web.BrowserLive do
           file_dir = Path.dirname(full_file_path)
 
           if file_dir == visible_path do
-            assign(socket, folder_files: Folders.list_files(visible_path))
+            assign(socket, folder_files: Folders.sort_files(Folders.list_files(visible_path), socket.assigns.sort_mode))
           else
             socket
           end
@@ -1434,7 +1454,7 @@ defmodule ClaudePlans.Web.BrowserLive do
     socket =
       if folder && file_dir != folder.path do
         assign(socket,
-          folder_files: Folders.list_files(file_dir),
+          folder_files: Folders.sort_files(Folders.list_files(file_dir), socket.assigns.sort_mode),
           folder_current_path: file_dir
         )
       else
@@ -1481,7 +1501,8 @@ defmodule ClaudePlans.Web.BrowserLive do
   defp load_project(socket, dir_name) do
     projects_dir = socket.assigns.projects_dir
     files = Projects.list_files(projects_dir, dir_name)
-    first_file = if files != [], do: hd(files).rel_path
+    sorted_files = Projects.sort_files(files, socket.assigns.sort_mode)
+    first_file = if sorted_files != [], do: hd(sorted_files).rel_path
     project_path = Path.join(projects_dir, dir_name)
 
     # Pre-render all project files in background
@@ -1493,7 +1514,7 @@ defmodule ClaudePlans.Web.BrowserLive do
 
     assign(socket,
       selected_project: dir_name,
-      project_files: files,
+      project_files: sorted_files,
       selected_file: first_file,
       url_project_file: first_file,
       project_annotation_state: nil
@@ -1655,11 +1676,49 @@ defmodule ClaudePlans.Web.BrowserLive do
 
   # --- Custom Folders helpers ---
 
+  # --- Sort helpers ---
+
+  defp next_sort_mode("name", :name_asc), do: :name_desc
+  defp next_sort_mode("name", _), do: :name_asc
+  defp next_sort_mode("modified", :modified_desc), do: :modified_asc
+  defp next_sort_mode("modified", _), do: :modified_desc
+  defp next_sort_mode(_, current), do: current
+
+  defp apply_sort(socket) do
+    mode = socket.assigns.sort_mode
+
+    socket
+    |> sort_plans(mode)
+    |> sort_project_files(mode)
+    |> sort_folder_files(mode)
+  end
+
+  defp sort_plans(socket, mode) do
+    sorted =
+      case mode do
+        :name_asc -> Enum.sort_by(socket.assigns.plans, & &1.display_name)
+        :name_desc -> Enum.sort_by(socket.assigns.plans, & &1.display_name, :desc)
+        :modified_desc -> Enum.sort_by(socket.assigns.plans, & &1.modified, :desc)
+        :modified_asc -> Enum.sort_by(socket.assigns.plans, & &1.modified, :asc)
+        _ -> socket.assigns.plans
+      end
+
+    assign(socket, plans: sorted)
+  end
+
+  defp sort_project_files(socket, mode) do
+    assign(socket, project_files: Projects.sort_files(socket.assigns.project_files, mode))
+  end
+
+  defp sort_folder_files(socket, mode) do
+    assign(socket, folder_files: Folders.sort_files(socket.assigns.folder_files, mode))
+  end
+
   defp load_custom_folder(socket, folder_id) do
     folder = Enum.find(socket.assigns.custom_folders, &(&1.id == folder_id))
 
     if folder do
-      files = Folders.list_files(folder.path)
+      files = Folders.sort_files(Folders.list_files(folder.path), socket.assigns.sort_mode)
 
       assign(socket,
         selected_custom_folder: folder_id,

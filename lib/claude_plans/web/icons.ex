@@ -88,6 +88,28 @@ defmodule ClaudePlans.Web.Icons do
   attr :size, :integer, default: 16
   attr :class, :string, default: ""
 
+  def icon_clock_down(assigns) do
+    ~H"""
+    <.svg size={@size} class={@class}>
+      <path d="M12 2a10 10 0 0 0-7.38 16.75" /><path d="M12 6v6l4 2" /><path d="m16 19 3 3 3-3" /><path d="M19 16v6" /><path d="M22 12a10 10 0 0 0-10-10" />
+    </.svg>
+    """
+  end
+
+  attr :size, :integer, default: 16
+  attr :class, :string, default: ""
+
+  def icon_clock_up(assigns) do
+    ~H"""
+    <.svg size={@size} class={@class}>
+      <path d="M12 2a10 10 0 0 0-7.38 16.75" /><path d="M12 6v6l4 2" /><path d="m22 19-3-3-3 3" /><path d="M19 22v-6" /><path d="M22 12a10 10 0 0 0-10-10" />
+    </.svg>
+    """
+  end
+
+  attr :size, :integer, default: 16
+  attr :class, :string, default: ""
+
   def icon_columns(assigns) do
     ~H"""
     <.svg size={@size} class={@class}>

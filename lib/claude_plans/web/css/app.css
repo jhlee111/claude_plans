@@ -114,6 +114,13 @@ body {
   color: #64748b;
 }
 
+/* Sort buttons */
+.cb-sort-active {
+  color: #4338ca !important;
+  border-color: #a5b4fc !important;
+  background: #eef2ff !important;
+}
+
 /* File list buttons */
 .cb-file-row {
   position: relative;
@@ -535,6 +542,11 @@ body {
   background: #3a1111;
   color: #f87171;
   border-color: #7f1d1d;
+}
+[data-theme="dark"] .cb-sort-active {
+  color: #a5b4fc !important;
+  border-color: #6366f1 !important;
+  background: rgba(99, 102, 241, 0.15) !important;
 }
 
 /* Folder browser */
