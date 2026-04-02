@@ -235,12 +235,13 @@ defmodule ClaudePlans.Web.BrowserLive do
 
   defp apply_search(socket, query) do
     results = SearchIndex.search(query)
-    prerender_search_results(results, socket.assigns.projects_dir)
-    flat_matches = build_flat_matches(results)
+    sorted = sort_search_results_by_mode(results, socket.assigns.sort_mode)
+    prerender_search_results(sorted, socket.assigns.projects_dir)
+    flat_matches = build_flat_matches(sorted)
 
     assign(socket,
       search_query: query,
-      search_results: results,
+      search_results: sorted,
       search_flat_matches: flat_matches,
       search_match_cursor: -1,
       content_highlight: nil,
@@ -1691,6 +1692,7 @@ defmodule ClaudePlans.Web.BrowserLive do
     |> sort_plans(mode)
     |> sort_project_files(mode)
     |> sort_folder_files(mode)
+    |> sort_search(mode)
   end
 
   defp sort_plans(socket, mode) do
@@ -1713,6 +1715,17 @@ defmodule ClaudePlans.Web.BrowserLive do
   defp sort_folder_files(socket, mode) do
     assign(socket, folder_files: Folders.sort_files(socket.assigns.folder_files, mode))
   end
+
+  defp sort_search(socket, mode) do
+    sorted = sort_search_results_by_mode(socket.assigns.search_results, mode)
+    flat_matches = build_flat_matches(sorted)
+    assign(socket, search_results: sorted, search_flat_matches: flat_matches)
+  end
+
+  defp sort_search_results_by_mode(results, :name_asc), do: Enum.sort_by(results, & &1.display_name)
+  defp sort_search_results_by_mode(results, :name_desc), do: Enum.sort_by(results, & &1.display_name, :desc)
+  defp sort_search_results_by_mode(results, :modified_asc), do: Enum.sort_by(results, & &1.modified_at, :asc)
+  defp sort_search_results_by_mode(results, _), do: Enum.sort_by(results, & &1.modified_at, :desc)
 
   defp load_custom_folder(socket, folder_id) do
     folder = Enum.find(socket.assigns.custom_folders, &(&1.id == folder_id))

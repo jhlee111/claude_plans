@@ -47,7 +47,10 @@ defmodule ClaudePlans.Web.Components.SidebarComponents do
     ~H"""
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem">
       <span class="cb-section-label">Results</span>
-      <span class="cb-count">{length(@search_results)}</span>
+      <div style="display:flex;align-items:center;gap:0.5rem">
+        <.sort_buttons sort_mode={@sort_mode} />
+        <span class="cb-count">{length(@search_results)}</span>
+      </div>
     </div>
     <div :for={{result, idx} <- Enum.with_index(@search_results)} class="cb-file-row">
       <button
@@ -56,9 +59,9 @@ defmodule ClaudePlans.Web.Components.SidebarComponents do
         class={"cb-file-btn#{if search_result_active?(result, assigns), do: " cb-file-btn--active", else: ""}"}
       >
         <div class="cb-file-name">{result.display_name}</div>
-        <div class="cb-search-source">
-          {source_label(result)}
-          <span :if={result.modified_at}>· {format_time(result.modified_at)}</span>
+        <div class="cb-search-meta">
+          <span class="cb-search-source">{source_label(result)}</span>
+          <span :if={result.modified_at} class="cb-file-time">{format_time(result.modified_at)}</span>
         </div>
         <div :for={match <- Enum.take(result.matches, 2)} class="cb-search-match">
           <span class="cb-match-line">L{match.line_number}:</span> {match.line_text}

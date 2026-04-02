@@ -802,9 +802,16 @@ body {
 }
 
 /* Search results */
+.cb-search-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 1px;
+}
 .cb-search-source {
-  font-size: 0.5625rem;
-  color: #64748b;
+  font-size: 0.625rem;
+  color: #94a3b8;
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
@@ -1017,7 +1024,7 @@ kbd {
   color: #e2e8f0;
 }
 [data-theme="dark"] .cb-search-source {
-  color: #64748b;
+  color: #94a3b8;
 }
 [data-theme="dark"] .cb-search-match {
   color: #94a3b8;
