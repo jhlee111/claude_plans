@@ -69,7 +69,10 @@ defmodule ClaudePlans.Web.BrowserLive do
        project_annotation_state: nil,
        search_query: "",
        search_results: [],
+       search_flat_matches: [],
+       search_match_cursor: -1,
        content_highlight: nil,
+       content_highlight_line: nil,
        show_help: false,
        view_mode: :rendered,
        diff_html: nil,
@@ -126,7 +129,7 @@ defmodule ClaudePlans.Web.BrowserLive do
   defp apply_tab_switch(socket, tab) when tab == socket.assigns.active_tab, do: socket
 
   defp apply_tab_switch(socket, :projects) do
-    socket = assign(socket, active_tab: :projects, content_highlight: nil)
+    socket = assign(socket, active_tab: :projects, content_highlight: nil, content_highlight_line: nil)
 
     if is_nil(socket.assigns.selected_project) and socket.assigns.projects != [] do
       [first | _] = socket.assigns.projects
@@ -137,13 +140,14 @@ defmodule ClaudePlans.Web.BrowserLive do
   end
 
   defp apply_tab_switch(socket, :folders) do
-    assign(socket, active_tab: :folders, content_highlight: nil)
+    assign(socket, active_tab: :folders, content_highlight: nil, content_highlight_line: nil)
   end
 
   defp apply_tab_switch(socket, :activity) do
     assign(socket,
       active_tab: :activity,
       content_highlight: nil,
+      content_highlight_line: nil,
       unseen_activity_count: 0,
       selected_activity_index: nil,
       activity_diff_html: nil
@@ -151,7 +155,7 @@ defmodule ClaudePlans.Web.BrowserLive do
   end
 
   defp apply_tab_switch(socket, tab) do
-    assign(socket, active_tab: tab, content_highlight: nil)
+    assign(socket, active_tab: tab, content_highlight: nil, content_highlight_line: nil)
   end
 
   defp apply_plan_selection(socket, :plans, plan_param) do
@@ -218,12 +222,29 @@ defmodule ClaudePlans.Web.BrowserLive do
   defp apply_search(socket, query) when query == socket.assigns.search_query, do: socket
 
   defp apply_search(socket, ""),
-    do: assign(socket, search_query: "", search_results: [], content_highlight: nil)
+    do:
+      assign(socket,
+        search_query: "",
+        search_results: [],
+        search_flat_matches: [],
+        search_match_cursor: -1,
+        content_highlight: nil,
+        content_highlight_line: nil
+      )
 
   defp apply_search(socket, query) do
     results = SearchIndex.search(query)
     prerender_search_results(results, socket.assigns.projects_dir)
-    assign(socket, search_query: query, search_results: results, content_highlight: nil)
+    flat_matches = build_flat_matches(results)
+
+    assign(socket,
+      search_query: query,
+      search_results: results,
+      search_flat_matches: flat_matches,
+      search_match_cursor: -1,
+      content_highlight: nil,
+      content_highlight_line: nil
+    )
   end
 
   defp prerender_search_results([], _projects_dir), do: :ok
@@ -300,8 +321,12 @@ defmodule ClaudePlans.Web.BrowserLive do
     idx = String.to_integer(idx_str)
 
     case Enum.at(socket.assigns.search_results, idx) do
-      nil -> {:noreply, socket}
-      result -> select_search_result(socket, result)
+      nil ->
+        {:noreply, socket}
+
+      result ->
+        socket = sync_flat_cursor_to_result(socket, result)
+        select_search_result(socket, result)
     end
   end
 
@@ -391,6 +416,14 @@ defmodule ClaudePlans.Web.BrowserLive do
     navigate_search_result(socket, :prev)
   end
 
+  def handle_event("kb_next_match", _params, socket) do
+    navigate_flat_match(socket, :next)
+  end
+
+  def handle_event("kb_prev_match", _params, socket) do
+    navigate_flat_match(socket, :prev)
+  end
+
   def handle_event("kb_escape", _params, socket) do
     {:noreply, dismiss_topmost_layer(socket)}
   end
@@ -400,7 +433,10 @@ defmodule ClaudePlans.Web.BrowserLive do
       assign(socket,
         search_query: "",
         search_results: [],
+        search_flat_matches: [],
+        search_match_cursor: -1,
         content_highlight: nil,
+        content_highlight_line: nil,
         selected_activity_index: nil,
         activity_diff_html: nil
       )
@@ -470,7 +506,7 @@ defmodule ClaudePlans.Web.BrowserLive do
         {:noreply, socket}
 
       %{category: :plan, filename: filename} ->
-        socket = assign(socket, content_highlight: nil)
+        socket = assign(socket, content_highlight: nil, content_highlight_line: nil)
         navigate_to_plan_diff(socket, filename)
 
       %{category: cat, project: project, rel_path: rel_path}
@@ -922,11 +958,17 @@ defmodule ClaudePlans.Web.BrowserLive do
       )
     end
 
-    # Refresh sidebar file list if the change is in the currently selected folder
+    # Refresh sidebar file list if the change is within the currently visible folder
     socket =
-      case current_folder_path(socket.assigns) do
-        ^watched_path ->
-          assign(socket, folder_files: Folders.list_files(watched_path))
+      case {folder_original_path(socket.assigns), current_folder_path(socket.assigns)} do
+        {^watched_path, visible_path} when is_binary(visible_path) ->
+          file_dir = Path.dirname(full_file_path)
+
+          if file_dir == visible_path do
+            assign(socket, folder_files: Folders.list_files(visible_path))
+          else
+            socket
+          end
 
         _ ->
           socket
@@ -994,6 +1036,7 @@ defmodule ClaudePlans.Web.BrowserLive do
               font_size={@font_size}
               content_width={@content_width}
               content_highlight={@content_highlight}
+              content_highlight_line={@content_highlight_line}
               project_path={current_project_path(assigns)}
               initial_file={@url_project_file}
             />
@@ -1004,6 +1047,7 @@ defmodule ClaudePlans.Web.BrowserLive do
               font_size={@font_size}
               content_width={@content_width}
               content_highlight={@content_highlight}
+              content_highlight_line={@content_highlight_line}
               folder_path={current_folder_path(assigns)}
               initial_file={@url_folder_file}
             />
@@ -1062,6 +1106,7 @@ defmodule ClaudePlans.Web.BrowserLive do
            selected: filename,
            html: RenderCache.render(content),
            content_highlight: nil,
+           content_highlight_line: nil,
            versions: versions,
            view_mode: view_mode,
            diff_html: diff_html,
@@ -1102,6 +1147,61 @@ defmodule ClaudePlans.Web.BrowserLive do
     end
   end
 
+  defp navigate_flat_match(socket, direction) do
+    flat = socket.assigns.search_flat_matches
+
+    if flat == [] do
+      {:noreply, socket}
+    else
+      cursor = socket.assigns.search_match_cursor
+      max_cursor = length(flat) - 1
+
+      new_cursor =
+        case direction do
+          :next -> min(cursor + 1, max_cursor)
+          :prev -> max(cursor - 1, 0)
+        end
+
+      {result_idx, _line_number} = Enum.at(flat, new_cursor)
+      result = Enum.at(socket.assigns.search_results, result_idx)
+
+      # Count how many matches for the same result come before this cursor position
+      match_idx_in_doc =
+        flat
+        |> Enum.take(new_cursor)
+        |> Enum.count(fn {ridx, _} -> ridx == result_idx end)
+
+      socket =
+        assign(socket,
+          search_match_cursor: new_cursor,
+          content_highlight_line: match_idx_in_doc
+        )
+
+      select_search_result(socket, result)
+    end
+  end
+
+  defp sync_flat_cursor_to_result(socket, result) do
+    result_idx = Enum.find_index(socket.assigns.search_results, &(&1.path == result.path))
+
+    cursor =
+      Enum.find_index(socket.assigns.search_flat_matches, fn {ridx, _} ->
+        ridx == result_idx
+      end) || -1
+
+    assign(socket, search_match_cursor: cursor, content_highlight_line: nil)
+  end
+
+  defp build_flat_matches(results) do
+    results
+    |> Enum.with_index()
+    |> Enum.flat_map(fn {result, result_idx} ->
+      Enum.map(result.matches, fn match ->
+        {result_idx, match.line_number}
+      end)
+    end)
+  end
+
   defp dismiss_topmost_layer(
          %{assigns: %{active_tab: :activity, selected_activity_index: idx}} = socket
        )
@@ -1125,10 +1225,18 @@ defmodule ClaudePlans.Web.BrowserLive do
     do: assign(socket, show_help: false)
 
   defp dismiss_topmost_layer(%{assigns: %{content_highlight: h}} = socket) when not is_nil(h),
-    do: assign(socket, content_highlight: nil)
+    do: assign(socket, content_highlight: nil, content_highlight_line: nil)
 
   defp dismiss_topmost_layer(%{assigns: %{search_query: q}} = socket) when q != "",
-    do: assign(socket, search_query: "", search_results: [], content_highlight: nil)
+    do:
+      assign(socket,
+        search_query: "",
+        search_results: [],
+        search_flat_matches: [],
+        search_match_cursor: -1,
+        content_highlight: nil,
+        content_highlight_line: nil
+      )
 
   defp dismiss_topmost_layer(socket), do: socket
 
@@ -1161,6 +1269,7 @@ defmodule ClaudePlans.Web.BrowserLive do
 
   defp kb_select_item(socket, item) do
     if socket.assigns.search_query != "" do
+      socket = sync_flat_cursor_to_result(socket, item)
       select_search_result(socket, item)
     else
       select_visible_item(socket, item)
@@ -1168,12 +1277,18 @@ defmodule ClaudePlans.Web.BrowserLive do
   end
 
   defp current_search_result_index(socket) do
+    tab = socket.assigns.active_tab
+
     Enum.find_index(socket.assigns.search_results, fn
       %{source: :plan, filename: f} ->
-        socket.assigns.selected == f
+        tab == :plans && socket.assigns.selected == f
 
       %{source: :project, project: p, rel_path: r} ->
-        socket.assigns.selected_project == p && socket.assigns.selected_file == r
+        tab == :projects && socket.assigns.selected_project == p && socket.assigns.selected_file == r
+
+      %{source: :folder, folder_id: fid, rel_path: r} ->
+        tab == :folders && socket.assigns.selected_custom_folder == fid &&
+          socket.assigns.folder_nav_selected == r
     end)
   end
 
@@ -1302,6 +1417,54 @@ defmodule ClaudePlans.Web.BrowserLive do
      )}
   end
 
+  defp select_search_result(socket, %{source: :folder, folder_id: fid, rel_path: rel, path: path}) do
+    highlight = socket.assigns.search_query
+
+    socket =
+      if socket.assigns.selected_custom_folder != fid do
+        load_custom_folder(socket, fid)
+      else
+        socket
+      end
+
+    # If the file is in a subfolder, navigate to that subfolder
+    folder = Enum.find(socket.assigns.custom_folders, &(&1.id == fid))
+    file_dir = Path.dirname(path)
+
+    socket =
+      if folder && file_dir != folder.path do
+        assign(socket,
+          folder_files: Folders.list_files(file_dir),
+          folder_current_path: file_dir
+        )
+      else
+        socket
+      end
+
+    send_update(FoldersViewerComponent,
+      id: "folders-viewer",
+      initial_file: Path.basename(path)
+    )
+
+    {:noreply,
+     socket
+     |> assign(
+       active_tab: :folders,
+       folder_nav_selected: rel,
+       url_folder_file: Path.basename(path),
+       content_highlight: highlight
+     )
+     |> push_patch(
+       to:
+         UrlParams.build(socket.assigns, %{
+           tab: :folders,
+           folder: fid,
+           folder_file: Path.basename(path)
+         }),
+       replace: true
+     )}
+  end
+
   defp search_result_paths(results, projects_dir) do
     Enum.map(results, fn
       %{source: :plan, filename: filename} ->
@@ -1309,6 +1472,9 @@ defmodule ClaudePlans.Web.BrowserLive do
 
       %{source: :project, project: proj, rel_path: rel} ->
         Path.join([projects_dir, proj, rel])
+
+      %{source: :folder, path: path} ->
+        path
     end)
   end
 
@@ -1471,6 +1637,7 @@ defmodule ClaudePlans.Web.BrowserLive do
           selected: filename,
           html: RenderCache.render(content),
           content_highlight: nil,
+          content_highlight_line: nil,
           versions: versions,
           view_mode: :rendered,
           diff_html: nil,

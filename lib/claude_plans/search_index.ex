@@ -11,12 +11,15 @@ defmodule ClaudePlans.SearchIndex do
   end
 
   @type search_result :: %{
-          source: :plan | :project,
+          source: :plan | :project | :folder,
           project: String.t() | nil,
+          folder_id: String.t() | nil,
+          folder_name: String.t() | nil,
           filename: String.t(),
           display_name: String.t(),
           rel_path: String.t(),
           path: String.t(),
+          modified_at: integer() | nil,
           matches: [%{line_number: pos_integer(), line_text: String.t()}]
         }
 
@@ -34,6 +37,7 @@ defmodule ClaudePlans.SearchIndex do
   @impl true
   def init(_) do
     {:ok, _} = Registry.register(ClaudePlans.Registry, :plan_updates, [])
+    {:ok, _} = Registry.register(ClaudePlans.Registry, :folder_updates, [])
     Process.send_after(self(), :rebuild, 0)
     schedule_refresh()
     {:ok, %{entries: %{}}}
@@ -65,7 +69,7 @@ defmodule ClaudePlans.SearchIndex do
           acc
         end
       end)
-      |> Enum.reverse()
+      |> Enum.sort_by(& &1.modified_at, :desc)
       |> Enum.take(@max_results)
 
     {:reply, results, state}
@@ -80,6 +84,10 @@ defmodule ClaudePlans.SearchIndex do
     {:noreply, %{state | entries: update_plan_entry(state.entries, filename)}}
   end
 
+  def handle_info({:folder_file_updated, _watched_path, file_path}, state) do
+    {:noreply, %{state | entries: update_folder_entry(state.entries, file_path)}}
+  end
+
   def handle_info(:refresh, state) do
     schedule_refresh()
     {:noreply, %{state | entries: build_index()}}
@@ -88,7 +96,7 @@ defmodule ClaudePlans.SearchIndex do
   # --- Index Building ---
 
   defp build_index do
-    entries = plan_entries() ++ project_entries()
+    entries = plan_entries() ++ project_entries() ++ folder_entries()
     Map.new(entries, fn entry -> {entry.path, entry} end)
   end
 
@@ -110,6 +118,7 @@ defmodule ClaudePlans.SearchIndex do
               display_name: String.replace_trailing(filename, ".md", ""),
               rel_path: filename,
               path: path,
+              modified_at: file_mtime(path),
               content: content
             }
 
@@ -146,6 +155,7 @@ defmodule ClaudePlans.SearchIndex do
               display_name: String.replace_trailing(filename, ".md", ""),
               rel_path: filename,
               path: path,
+              modified_at: file_mtime(path),
               content: content
             }
           ]
@@ -206,12 +216,112 @@ defmodule ClaudePlans.SearchIndex do
             display_name: String.replace_trailing(filename, ".md", ""),
             rel_path: rel_path,
             path: path,
+            modified_at: file_mtime(path),
             content: content
           }
         ]
 
       {:error, _} ->
         []
+    end
+  end
+
+  defp folder_entries do
+    ClaudePlans.Folders.list()
+    |> Enum.flat_map(fn folder ->
+      read_folder_files_recursive(folder.path, folder.path, folder.id, folder.name)
+    end)
+  end
+
+  defp read_folder_files_recursive(scan_dir, root_path, folder_id, folder_name) do
+    case File.ls(scan_dir) do
+      {:ok, entries} ->
+        entries
+        |> Enum.filter(fn name -> not String.starts_with?(name, ".") end)
+        |> Enum.flat_map(fn name ->
+          full = Path.join(scan_dir, name)
+
+          cond do
+            File.dir?(full) ->
+              read_folder_files_recursive(full, root_path, folder_id, folder_name)
+
+            String.ends_with?(name, ".md") ->
+              rel_path = Path.relative_to(full, root_path)
+
+              case File.read(full) do
+                {:ok, content} ->
+                  [
+                    %{
+                      source: :folder,
+                      project: nil,
+                      folder_id: folder_id,
+                      folder_name: folder_name,
+                      filename: name,
+                      display_name: String.replace_trailing(name, ".md", ""),
+                      rel_path: rel_path,
+                      path: full,
+                      modified_at: file_mtime(full),
+                      content: content
+                    }
+                  ]
+
+                {:error, _} ->
+                  []
+              end
+
+            true ->
+              []
+          end
+        end)
+
+      {:error, _} ->
+        []
+    end
+  end
+
+  defp update_folder_entry(entries, file_path) do
+    if String.ends_with?(file_path, ".md") and File.regular?(file_path) do
+      folder = find_folder_for_path(file_path)
+
+      case {folder, File.read(file_path)} do
+        {{folder_id, folder_name, root_path}, {:ok, content}} ->
+          rel_path = Path.relative_to(file_path, root_path)
+
+          entry = %{
+            source: :folder,
+            project: nil,
+            folder_id: folder_id,
+            folder_name: folder_name,
+            filename: Path.basename(file_path),
+            display_name: String.replace_trailing(Path.basename(file_path), ".md", ""),
+            rel_path: rel_path,
+            path: file_path,
+            modified_at: file_mtime(file_path),
+            content: content
+          }
+
+          Map.put(entries, file_path, entry)
+
+        _ ->
+          Map.delete(entries, file_path)
+      end
+    else
+      Map.delete(entries, file_path)
+    end
+  end
+
+  defp find_folder_for_path(file_path) do
+    Enum.find_value(ClaudePlans.Folders.list(), fn folder ->
+      if String.starts_with?(file_path, folder.path <> "/") do
+        {folder.id, folder.name, folder.path}
+      end
+    end)
+  end
+
+  defp file_mtime(path) do
+    case File.stat(path, time: :posix) do
+      {:ok, %{mtime: mtime}} -> mtime
+      {:error, _} -> nil
     end
   end
 

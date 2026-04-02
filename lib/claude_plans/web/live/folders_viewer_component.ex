@@ -16,6 +16,7 @@ defmodule ClaudePlans.Web.FoldersViewerComponent do
        font_size: 16,
        content_width: "wide",
        content_highlight: nil,
+       content_highlight_line: nil,
        folder_path: nil
      )}
   end
@@ -29,7 +30,7 @@ defmodule ClaudePlans.Web.FoldersViewerComponent do
 
     socket =
       socket
-      |> assign(Map.take(new_assigns, [:id, :font_size, :content_width, :content_highlight]))
+      |> assign(Map.take(new_assigns, [:id, :font_size, :content_width, :content_highlight, :content_highlight_line]))
       # Step 1: folder_path change → reset viewer
       |> then(fn s ->
         if changed?(new_assigns, old, :folder_path) do
@@ -260,6 +261,7 @@ defmodule ClaudePlans.Web.FoldersViewerComponent do
           phx-update="replace"
           phx-target={@myself}
           data-highlight={@content_highlight}
+          data-highlight-line={@content_highlight_line}
           data-inspector={to_string(@viewer.inspector_mode)}
           data-annotations={Jason.encode!(Enum.map(@viewer.annotations, & &1.block_index))}
           style={"font-size: #{@font_size}px"}

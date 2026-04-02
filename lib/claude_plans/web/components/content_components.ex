@@ -121,7 +121,7 @@ defmodule ClaudePlans.Web.Components.ContentComponents do
       <div :if={@view_mode == :rendered && @inspector_mode} class="cb-inspector-banner">
         Click any block to annotate &middot; Press <kbd>a</kbd> or <kbd>Esc</kbd> to exit
       </div>
-      <div :if={@view_mode == :rendered} id="plan-content" class={"cp-content#{if @inspector_mode, do: " cb-inspector-active", else: ""}"} phx-hook="PlanContent" phx-update="replace" data-highlight={@content_highlight} data-inspector={to_string(@inspector_mode)} data-annotations={Jason.encode!(Enum.map(@annotations, & &1.block_index))} style={"font-size: #{@font_size}px"}>
+      <div :if={@view_mode == :rendered} id="plan-content" class={"cp-content#{if @inspector_mode, do: " cb-inspector-active", else: ""}"} phx-hook="PlanContent" phx-update="replace" data-highlight={@content_highlight} data-highlight-line={@content_highlight_line} data-inspector={to_string(@inspector_mode)} data-annotations={Jason.encode!(Enum.map(@annotations, & &1.block_index))} style={"font-size: #{@font_size}px"}>
         {Phoenix.HTML.raw(@html)}
       </div>
     </div>

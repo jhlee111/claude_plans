@@ -18,7 +18,10 @@ defmodule ClaudePlans.Web.Components.SidebarComponents do
         class={"cb-file-btn#{if search_result_active?(result, assigns), do: " cb-file-btn--active", else: ""}"}
       >
         <div class="cb-file-name">{result.display_name}</div>
-        <div class="cb-search-source">{source_label(result)}</div>
+        <div class="cb-search-source">
+          {source_label(result)}
+          <span :if={result.modified_at}>· {format_time(result.modified_at)}</span>
+        </div>
         <div :for={match <- Enum.take(result.matches, 2)} class="cb-search-match">
           <span class="cb-match-line">L{match.line_number}:</span> {match.line_text}
         </div>
