@@ -72,6 +72,53 @@ defmodule ClaudePlans.ProjectsTest do
     end
   end
 
+  describe "list_files/2 - modified timestamps" do
+    test "file entries include modified timestamp", %{tmp_dir: tmp_dir} do
+      project = "proj"
+      dir = Path.join([tmp_dir, project, "memory"])
+      File.mkdir_p!(dir)
+      File.write!(Path.join(dir, "note.md"), "content")
+
+      [file] = Projects.list_files(tmp_dir, project)
+      assert is_integer(file.modified)
+      assert file.modified > 0
+    end
+  end
+
+  describe "sort_files/2" do
+    setup %{tmp_dir: tmp_dir} do
+      project = "proj"
+      memory = Path.join([tmp_dir, project, "memory"])
+      File.mkdir_p!(memory)
+
+      File.write!(Path.join(memory, "beta.md"), "b")
+      Process.sleep(1100)
+      File.write!(Path.join(memory, "alpha.md"), "a")
+
+      {:ok, files: Projects.list_files(tmp_dir, project)}
+    end
+
+    test "name_asc sorts alphabetically", %{files: files} do
+      sorted = Projects.sort_files(files, :name_asc)
+      assert Enum.map(sorted, & &1.name) == ["alpha.md", "beta.md"]
+    end
+
+    test "name_desc sorts reverse alphabetically", %{files: files} do
+      sorted = Projects.sort_files(files, :name_desc)
+      assert Enum.map(sorted, & &1.name) == ["beta.md", "alpha.md"]
+    end
+
+    test "modified_desc sorts newest first", %{files: files} do
+      sorted = Projects.sort_files(files, :modified_desc)
+      assert hd(sorted).name == "alpha.md"
+    end
+
+    test "modified_asc sorts oldest first", %{files: files} do
+      sorted = Projects.sort_files(files, :modified_asc)
+      assert hd(sorted).name == "beta.md"
+    end
+  end
+
   describe "display_name/1" do
     test "strips user prefix from directory name" do
       user = System.get_env("USER", "user")

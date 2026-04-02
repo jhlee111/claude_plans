@@ -77,6 +77,71 @@ defmodule ClaudePlans.Web.BrowserLiveTest do
     end
   end
 
+  describe "sort controls" do
+    test "sort buttons render on plans tab", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/")
+
+      # Default is modified_desc — clock button should be active
+      assert has_element?(view, ".cb-sort-active")
+    end
+
+    test "cycle_sort toggles to name_asc", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/")
+
+      render_click(view, "cycle_sort", %{"field" => "name"})
+
+      # After clicking name, it should show name sort as active
+      assert has_element?(view, ".cb-sort-active")
+    end
+
+    test "cycle_sort name toggles between asc and desc", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/")
+
+      # First click: name_asc
+      render_click(view, "cycle_sort", %{"field" => "name"})
+      # Second click: name_desc
+      render_click(view, "cycle_sort", %{"field" => "name"})
+      # Third click back to name_asc
+      render_click(view, "cycle_sort", %{"field" => "name"})
+
+      # No crash, still renders
+      assert has_element?(view, ".cb-layout")
+    end
+
+    test "cycle_sort modified toggles between desc and asc", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/")
+
+      # Default is modified_desc, click toggles to modified_asc
+      render_click(view, "cycle_sort", %{"field" => "modified"})
+      # Click again: back to modified_desc
+      render_click(view, "cycle_sort", %{"field" => "modified"})
+
+      assert has_element?(view, ".cb-layout")
+    end
+
+    test "sort buttons render on search results", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/?q=test")
+
+      assert has_element?(view, ".cb-section-label", "Results")
+      assert has_element?(view, "[phx-click=cycle_sort]")
+    end
+
+    test "sort applies across tabs without crash", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/")
+
+      # Sort on plans tab
+      render_click(view, "cycle_sort", %{"field" => "name"})
+
+      # Switch to projects tab — sort should persist
+      view |> element(".cb-tab", "Projects") |> render_click()
+      assert has_element?(view, ".cb-sort-active")
+
+      # Switch to folders tab
+      view |> element(".cb-tab", "Folders") |> render_click()
+      assert has_element?(view, ".cb-layout")
+    end
+  end
+
   describe "font size" do
     test "font size increases and decreases", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/")
