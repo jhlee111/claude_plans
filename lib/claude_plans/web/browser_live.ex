@@ -130,7 +130,8 @@ defmodule ClaudePlans.Web.BrowserLive do
   defp apply_tab_switch(socket, tab) when tab == socket.assigns.active_tab, do: socket
 
   defp apply_tab_switch(socket, :projects) do
-    socket = assign(socket, active_tab: :projects, content_highlight: nil, content_highlight_line: nil)
+    socket =
+      assign(socket, active_tab: :projects, content_highlight: nil, content_highlight_line: nil)
 
     if is_nil(socket.assigns.selected_project) and socket.assigns.projects != [] do
       [first | _] = socket.assigns.projects
@@ -986,7 +987,10 @@ defmodule ClaudePlans.Web.BrowserLive do
           file_dir = Path.dirname(full_file_path)
 
           if file_dir == visible_path do
-            assign(socket, folder_files: Folders.sort_files(Folders.list_files(visible_path), socket.assigns.sort_mode))
+            assign(socket,
+              folder_files:
+                Folders.sort_files(Folders.list_files(visible_path), socket.assigns.sort_mode)
+            )
           else
             socket
           end
@@ -1305,7 +1309,8 @@ defmodule ClaudePlans.Web.BrowserLive do
         tab == :plans && socket.assigns.selected == f
 
       %{source: :project, project: p, rel_path: r} ->
-        tab == :projects && socket.assigns.selected_project == p && socket.assigns.selected_file == r
+        tab == :projects && socket.assigns.selected_project == p &&
+          socket.assigns.selected_file == r
 
       %{source: :folder, folder_id: fid, rel_path: r} ->
         tab == :folders && socket.assigns.selected_custom_folder == fid &&
@@ -1455,7 +1460,8 @@ defmodule ClaudePlans.Web.BrowserLive do
     socket =
       if folder && file_dir != folder.path do
         assign(socket,
-          folder_files: Folders.sort_files(Folders.list_files(file_dir), socket.assigns.sort_mode),
+          folder_files:
+            Folders.sort_files(Folders.list_files(file_dir), socket.assigns.sort_mode),
           folder_current_path: file_dir
         )
       else
@@ -1722,9 +1728,15 @@ defmodule ClaudePlans.Web.BrowserLive do
     assign(socket, search_results: sorted, search_flat_matches: flat_matches)
   end
 
-  defp sort_search_results_by_mode(results, :name_asc), do: Enum.sort_by(results, & &1.display_name)
-  defp sort_search_results_by_mode(results, :name_desc), do: Enum.sort_by(results, & &1.display_name, :desc)
-  defp sort_search_results_by_mode(results, :modified_asc), do: Enum.sort_by(results, & &1.modified_at, :asc)
+  defp sort_search_results_by_mode(results, :name_asc),
+    do: Enum.sort_by(results, & &1.display_name)
+
+  defp sort_search_results_by_mode(results, :name_desc),
+    do: Enum.sort_by(results, & &1.display_name, :desc)
+
+  defp sort_search_results_by_mode(results, :modified_asc),
+    do: Enum.sort_by(results, & &1.modified_at, :asc)
+
   defp sort_search_results_by_mode(results, _), do: Enum.sort_by(results, & &1.modified_at, :desc)
 
   defp load_custom_folder(socket, folder_id) do

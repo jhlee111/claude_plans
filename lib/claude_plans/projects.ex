@@ -50,7 +50,10 @@ defmodule ClaudePlans.Projects do
   @doc "Sort file entries by the given mode."
   @spec sort_files([file_entry()], atom()) :: [file_entry()]
   def sort_files(files, :name_asc), do: Enum.sort_by(files, fn f -> {f.dir || "", f.name} end)
-  def sort_files(files, :name_desc), do: Enum.sort_by(files, fn f -> {f.dir || "", f.name} end, :desc)
+
+  def sort_files(files, :name_desc),
+    do: Enum.sort_by(files, fn f -> {f.dir || "", f.name} end, :desc)
+
   def sort_files(files, :modified_desc), do: Enum.sort_by(files, & &1.modified, :desc)
   def sort_files(files, :modified_asc), do: Enum.sort_by(files, & &1.modified, :asc)
   def sort_files(files, _), do: files
@@ -79,7 +82,12 @@ defmodule ClaudePlans.Projects do
   end
 
   defp md_file_entry(dir, name, subdir) do
-    %{name: name, dir: subdir, rel_path: Path.join(subdir, name), modified: file_mtime(Path.join(dir, name))}
+    %{
+      name: name,
+      dir: subdir,
+      rel_path: Path.join(subdir, name),
+      modified: file_mtime(Path.join(dir, name))
+    }
   end
 
   defp file_mtime(path) do

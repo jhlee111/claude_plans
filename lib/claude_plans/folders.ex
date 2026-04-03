@@ -4,7 +4,12 @@ defmodule ClaudePlans.Folders do
   require Logger
 
   @type folder :: %{id: String.t(), path: String.t(), name: String.t()}
-  @type file_entry :: %{name: String.t(), rel_path: String.t(), full_path: String.t(), modified: integer()}
+  @type file_entry :: %{
+          name: String.t(),
+          rel_path: String.t(),
+          full_path: String.t(),
+          modified: integer()
+        }
 
   @doc "List all configured folders, filtering out deleted/inaccessible ones."
   @spec list() :: [folder()]
@@ -69,7 +74,14 @@ defmodule ClaudePlans.Folders do
           |> Enum.filter(&String.ends_with?(&1, ".md"))
           |> Enum.map(fn name ->
             full = Path.join(folder_path, name)
-            %{name: name, rel_path: name, full_path: full, type: :file, modified: file_mtime(full)}
+
+            %{
+              name: name,
+              rel_path: name,
+              full_path: full,
+              type: :file,
+              modified: file_mtime(full)
+            }
           end)
 
         dir_entries ++ file_entries

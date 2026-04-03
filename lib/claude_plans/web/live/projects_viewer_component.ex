@@ -26,7 +26,15 @@ defmodule ClaudePlans.Web.ProjectsViewerComponent do
 
     socket =
       socket
-      |> assign(Map.take(new_assigns, [:id, :font_size, :content_width, :content_highlight, :content_highlight_line]))
+      |> assign(
+        Map.take(new_assigns, [
+          :id,
+          :font_size,
+          :content_width,
+          :content_highlight,
+          :content_highlight_line
+        ])
+      )
       # Step 1: project_path change → reset viewer
       |> then(fn s ->
         if changed?(new_assigns, old, :project_path) do
