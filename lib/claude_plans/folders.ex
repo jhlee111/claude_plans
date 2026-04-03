@@ -4,7 +4,12 @@ defmodule ClaudePlans.Folders do
   require Logger
 
   @type folder :: %{id: String.t(), path: String.t(), name: String.t()}
-  @type file_entry :: %{name: String.t(), rel_path: String.t(), full_path: String.t()}
+  @type file_entry :: %{
+          name: String.t(),
+          rel_path: String.t(),
+          full_path: String.t(),
+          modified: integer()
+        }
 
   @doc "List all configured folders, filtering out deleted/inaccessible ones."
   @spec list() :: [folder()]
@@ -60,14 +65,23 @@ defmodule ClaudePlans.Folders do
         dir_entries =
           dirs
           |> Enum.map(fn name ->
-            %{name: name, rel_path: name, full_path: Path.join(folder_path, name), type: :dir}
+            full = Path.join(folder_path, name)
+            %{name: name, rel_path: name, full_path: full, type: :dir, modified: file_mtime(full)}
           end)
 
         file_entries =
           files
           |> Enum.filter(&String.ends_with?(&1, ".md"))
           |> Enum.map(fn name ->
-            %{name: name, rel_path: name, full_path: Path.join(folder_path, name), type: :file}
+            full = Path.join(folder_path, name)
+
+            %{
+              name: name,
+              rel_path: name,
+              full_path: full,
+              type: :file,
+              modified: file_mtime(full)
+            }
           end)
 
         dir_entries ++ file_entries
@@ -165,6 +179,28 @@ defmodule ClaudePlans.Folders do
     |> Base.encode16(case: :lower)
     |> binary_part(0, 8)
   end
+
+  defp file_mtime(path) do
+    case File.stat(path, time: :posix) do
+      {:ok, %{mtime: mtime}} -> mtime
+      _ -> 0
+    end
+  end
+
+  @doc "Sort file entries by the given mode. Directories always come first."
+  @spec sort_files([file_entry()], atom()) :: [file_entry()]
+  def sort_files(entries, mode) do
+    {dirs, files} = Enum.split_with(entries, &(&1.type == :dir))
+    sorted_dirs = do_sort(dirs, mode)
+    sorted_files = do_sort(files, mode)
+    sorted_dirs ++ sorted_files
+  end
+
+  defp do_sort(entries, :name_asc), do: Enum.sort_by(entries, & &1.name)
+  defp do_sort(entries, :name_desc), do: Enum.sort_by(entries, & &1.name, :desc)
+  defp do_sort(entries, :modified_desc), do: Enum.sort_by(entries, & &1.modified, :desc)
+  defp do_sort(entries, :modified_asc), do: Enum.sort_by(entries, & &1.modified, :asc)
+  defp do_sort(entries, _), do: entries
 
   defp display_name(path) do
     home = System.user_home!()

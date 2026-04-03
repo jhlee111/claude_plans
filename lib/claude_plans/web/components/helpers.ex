@@ -1,6 +1,8 @@
 defmodule ClaudePlans.Web.Components.Helpers do
   @moduledoc "Shared helper functions used by sidebar and content components."
 
+  def format_time(nil), do: ""
+
   def format_time(posix_time) when is_integer(posix_time) do
     now = System.os_time(:second)
     diff = now - posix_time
@@ -39,14 +41,21 @@ defmodule ClaudePlans.Web.Components.Helpers do
 
   def source_label(%{source: :plan}), do: "plan"
   def source_label(%{source: :project, project: proj}), do: "project: #{proj}"
+  def source_label(%{source: :folder, folder_name: name}), do: "folder: #{name}"
 
   def search_result_active?(result, assigns) do
+    tab = assigns.active_tab
+
     case result do
       %{source: :plan, filename: f} ->
-        assigns.selected == f
+        tab == :plans && assigns.selected == f
 
       %{source: :project, project: p, rel_path: r} ->
-        assigns.selected_project == p && assigns.selected_file == r
+        tab == :projects && assigns.selected_project == p && assigns.selected_file == r
+
+      %{source: :folder, folder_id: fid, rel_path: r} ->
+        tab == :folders && assigns[:selected_custom_folder] == fid &&
+          assigns[:folder_nav_selected] == r
     end
   end
 

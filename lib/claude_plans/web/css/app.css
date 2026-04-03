@@ -114,6 +114,13 @@ body {
   color: #64748b;
 }
 
+/* Sort buttons */
+.cb-sort-active {
+  color: #4338ca !important;
+  border-color: #a5b4fc !important;
+  background: #eef2ff !important;
+}
+
 /* File list buttons */
 .cb-file-row {
   position: relative;
@@ -536,6 +543,11 @@ body {
   color: #f87171;
   border-color: #7f1d1d;
 }
+[data-theme="dark"] .cb-sort-active {
+  color: #a5b4fc !important;
+  border-color: #6366f1 !important;
+  background: rgba(99, 102, 241, 0.15) !important;
+}
 
 /* Folder browser */
 .cb-browse-list {
@@ -790,9 +802,16 @@ body {
 }
 
 /* Search results */
+.cb-search-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 1px;
+}
 .cb-search-source {
-  font-size: 0.5625rem;
-  color: #64748b;
+  font-size: 0.625rem;
+  color: #94a3b8;
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
@@ -1005,7 +1024,7 @@ kbd {
   color: #e2e8f0;
 }
 [data-theme="dark"] .cb-search-source {
-  color: #64748b;
+  color: #94a3b8;
 }
 [data-theme="dark"] .cb-search-match {
   color: #94a3b8;

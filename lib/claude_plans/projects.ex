@@ -10,7 +10,8 @@ defmodule ClaudePlans.Projects do
   @type file_entry :: %{
           name: String.t(),
           dir: String.t() | nil,
-          rel_path: String.t()
+          rel_path: String.t(),
+          modified: integer()
         }
 
   @spec list(String.t()) :: [project_entry()]
@@ -46,6 +47,17 @@ defmodule ClaudePlans.Projects do
     (root_files ++ memory_files) |> Enum.sort_by(fn f -> {f.dir || "", f.name} end)
   end
 
+  @doc "Sort file entries by the given mode."
+  @spec sort_files([file_entry()], atom()) :: [file_entry()]
+  def sort_files(files, :name_asc), do: Enum.sort_by(files, fn f -> {f.dir || "", f.name} end)
+
+  def sort_files(files, :name_desc),
+    do: Enum.sort_by(files, fn f -> {f.dir || "", f.name} end, :desc)
+
+  def sort_files(files, :modified_desc), do: Enum.sort_by(files, & &1.modified, :desc)
+  def sort_files(files, :modified_asc), do: Enum.sort_by(files, & &1.modified, :asc)
+  def sort_files(files, _), do: files
+
   defp build_entry(projects_dir, dir_name) do
     %{
       dir_name: dir_name,
@@ -62,13 +74,28 @@ defmodule ClaudePlans.Projects do
       {:error, _} -> []
     end
     |> Enum.filter(&String.ends_with?(&1, ".md"))
-    |> Enum.map(&md_file_entry(&1, subdir))
+    |> Enum.map(&md_file_entry(dir, &1, subdir))
   end
 
-  defp md_file_entry(name, nil), do: %{name: name, dir: nil, rel_path: name}
+  defp md_file_entry(dir, name, nil) do
+    %{name: name, dir: nil, rel_path: name, modified: file_mtime(Path.join(dir, name))}
+  end
 
-  defp md_file_entry(name, subdir),
-    do: %{name: name, dir: subdir, rel_path: Path.join(subdir, name)}
+  defp md_file_entry(dir, name, subdir) do
+    %{
+      name: name,
+      dir: subdir,
+      rel_path: Path.join(subdir, name),
+      modified: file_mtime(Path.join(dir, name))
+    }
+  end
+
+  defp file_mtime(path) do
+    case File.stat(path, time: :posix) do
+      {:ok, %{mtime: mtime}} -> mtime
+      _ -> 0
+    end
+  end
 
   @doc "Generate a VersionStore key for a project file path."
   @spec version_key(String.t()) :: String.t()
