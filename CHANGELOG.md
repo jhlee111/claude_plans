@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-04-02
+
+### Added
+- **Flat search navigation** — `n`/`N` keys now navigate across all search matches across documents, not just within the current file. Match cursor persists when switching between results
+- **Sort controls** — Sort file lists by name (A-Z/Z-A) or modification time (newest/oldest) via toggle buttons. Applied consistently across Plans, Projects, Folders, and Search Results sidebars
+- **Relative timestamps** — Project and folder file entries now show relative modification time (e.g. "1h ago", "2d ago") matching the existing plans display
+- **Search result meta** — Source label and modification time displayed side-by-side with improved contrast and readability
+
+### Fixed
+- Project file list now refreshes timestamps and sort order when files change externally (was only updating the content viewer, not the sidebar)
+
 ## [0.9.2] - 2026-03-31
 
 ### Added
