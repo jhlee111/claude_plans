@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.1] - 2026-04-04
+
+### Fixed
+- **Folder watcher resource limits** — Cap active file watchers at 10 to prevent file descriptor exhaustion; evicts the oldest watcher when the limit is exceeded
+- **Duplicate watcher prevention** — `add_folder` is now idempotent; adding an already-watched path is a no-op
+- **Watcher cleanup on project switch** — Previous project's file watcher is removed before starting a new one, preventing watcher accumulation
+
+### Added
+- Supervisor test coverage for watcher lifecycle, idempotency, and cap enforcement
+
 ## [0.10.0] - 2026-04-02
 
 ### Added
