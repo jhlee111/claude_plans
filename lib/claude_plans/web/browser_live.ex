@@ -1516,6 +1516,12 @@ defmodule ClaudePlans.Web.BrowserLive do
     all_paths = Enum.map(files, &Path.join(project_path, &1.rel_path))
     RenderCache.prerender(all_paths)
 
+    # Remove previous project watcher before starting new one
+    prev_path = current_project_path(socket.assigns)
+
+    if prev_path && prev_path != project_path,
+      do: FolderWatcherSupervisor.remove_folder(prev_path)
+
     # Start file watcher for the project directory
     FolderWatcherSupervisor.add_folder(project_path)
 
