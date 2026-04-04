@@ -501,10 +501,19 @@ defmodule ClaudePlans.Web.BrowserLive do
       event ->
         diff_html = compute_activity_diff(event)
 
+        unchecked =
+          if event.category == :plan do
+            VersionStore.mark_checked(event.filename)
+            VersionStore.unchecked_files()
+          else
+            socket.assigns.unchecked_plan_files
+          end
+
         {:noreply,
          assign(socket,
            selected_activity_index: idx,
-           activity_diff_html: diff_html
+           activity_diff_html: diff_html,
+           unchecked_plan_files: unchecked
          )}
     end
   end
