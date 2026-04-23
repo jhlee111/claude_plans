@@ -21,6 +21,7 @@ defmodule ClaudePlans.ActivityFeed do
   @max_events 100
   @ttl_ms 3_600_000
   @gc_interval_ms 60_000
+  @projects_poll_ms 5_000
 
   # --- Public API ---
 
@@ -56,11 +57,19 @@ defmodule ClaudePlans.ActivityFeed do
 
     known_files = scan_known_files(plans_dir, projects_dir)
 
-    dirs = Enum.filter([plans_dir, projects_dir], &is_binary/1)
-    {:ok, watcher_pid} = FileSystem.start_link(dirs: dirs)
-    FileSystem.subscribe(watcher_pid)
+    # Only watch plans_dir via FSEvents. projects_dir (~/.claude/projects) contains
+    # Claude Code's JSONL transcripts — large and continuously appended — so watching
+    # it recursively drives kernel_task CPU through the roof. Poll it instead: the
+    # only files we care about there (memory/*.md, CLAUDE.md) change rarely.
+    watcher_pid =
+      if is_binary(plans_dir) do
+        {:ok, pid} = FileSystem.start_link(dirs: [plans_dir])
+        FileSystem.subscribe(pid)
+        pid
+      end
 
     Process.send_after(self(), :gc_expired, @gc_interval_ms)
+    if is_binary(projects_dir), do: Process.send_after(self(), :poll_projects, @projects_poll_ms)
 
     {:ok,
      %{
@@ -124,6 +133,27 @@ defmodule ClaudePlans.ActivityFeed do
     events = Enum.filter(state.events, &(DateTime.compare(&1.timestamp, cutoff) == :gt))
     Process.send_after(self(), :gc_expired, @gc_interval_ms)
     {:noreply, %{state | events: events}}
+  end
+
+  @impl true
+  def handle_info(:poll_projects, state) do
+    Process.send_after(self(), :poll_projects, @projects_poll_ms)
+
+    current = state.projects_dir |> scan_project_files() |> Map.new()
+
+    previous =
+      for {path, mtime} <- state.known_files,
+          project_tracked?(path, state.projects_dir),
+          into: %{},
+          do: {path, mtime}
+
+    changed =
+      MapSet.new(Map.keys(current))
+      |> MapSet.union(MapSet.new(Map.keys(previous)))
+      |> Enum.filter(fn path -> Map.get(current, path) != Map.get(previous, path) end)
+
+    state = Enum.reduce(changed, state, &debounce_path(&2, &1))
+    {:noreply, state}
   end
 
   @impl true
@@ -227,6 +257,9 @@ defmodule ClaudePlans.ActivityFeed do
     is_binary(plans_dir) and String.starts_with?(path, plans_dir) and
       Path.dirname(path) == plans_dir
   end
+
+  defp project_tracked?(_path, projects_dir) when not is_binary(projects_dir), do: false
+  defp project_tracked?(path, projects_dir), do: String.starts_with?(path, projects_dir)
 
   defp project_path?(_path, projects_dir) when not is_binary(projects_dir), do: false
 
