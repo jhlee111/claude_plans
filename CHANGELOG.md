@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.2] - 2026-04-23
+
+### Fixed
+- **High `kernel_task` CPU on macOS** — `ActivityFeed` no longer watches `~/.claude/projects/` recursively via FSEvents. The tree contains Claude Code's live-appended JSONL transcripts, which were generating sustained kernel file-system events (observed at ~200% `kernel_task` CPU while the app was running). The directory is now polled on a 5s interval for the bounded set of files the feed actually cares about (`*/memory/*.md`, `*/CLAUDE.md`)
+- **Activity unread dot persisting after plan selection** — Clicking a plan activity event now calls `mark_checked` so the unread indicator clears immediately, instead of persisting until the user navigated to the plan via the goto button
+
 ## [0.10.1] - 2026-04-04
 
 ### Fixed
