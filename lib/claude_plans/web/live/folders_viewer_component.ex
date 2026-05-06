@@ -302,7 +302,7 @@ defmodule ClaudePlans.Web.FoldersViewerComponent do
           |> Map.put(:versions, VersionStore.list_versions(version_key))
           |> Map.put(:has_file_annotations, Annotations.present?(content))
 
-        assign(socket, viewer: viewer)
+        assign_viewer(socket, viewer)
 
       {:error, _} ->
         socket
@@ -314,7 +314,13 @@ defmodule ClaudePlans.Web.FoldersViewerComponent do
   end
 
   defp update_viewer(socket, fun) do
-    viewer = fun.(socket.assigns.viewer)
+    assign_viewer(socket, fun.(socket.assigns.viewer))
+  end
+
+  # Switching files resets the in-component viewer but the parent mirrors
+  # annotation state in its own assign — without this notify, the panel keeps
+  # rendering annotations from the previously selected file.
+  defp assign_viewer(socket, viewer) do
     notify_annotation_state(socket.assigns.viewer, viewer)
     assign(socket, viewer: viewer)
   end
