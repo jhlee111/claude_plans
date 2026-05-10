@@ -23,6 +23,11 @@ defmodule ClaudePlans.ActivityFeed do
   @gc_interval_ms 60_000
   @projects_poll_ms 5_000
 
+  # Events are mirrored to this ETS table so `list_events/0` is a lock-free read
+  # rather than a `GenServer.call` — the LiveView mount path can't tolerate the
+  # GenServer being briefly busy (heavy I/O, slow init) without timing out.
+  @ets_table :claude_plans_activity_events
+
   # --- Public API ---
 
   def start_link(_opts) do
@@ -36,10 +41,19 @@ defmodule ClaudePlans.ActivityFeed do
     :ok
   end
 
-  @doc "Returns the current list of events (newest first)."
+  @doc "Returns the current list of events (newest first). Reads directly from ETS."
   @spec list_events() :: [event()]
   def list_events do
-    GenServer.call(__MODULE__, :list_events)
+    case :ets.whereis(@ets_table) do
+      :undefined ->
+        []
+
+      _ ->
+        case :ets.lookup(@ets_table, :events) do
+          [{:events, events}] -> events
+          [] -> []
+        end
+    end
   end
 
   @doc "Record a folder file change event."
@@ -52,6 +66,9 @@ defmodule ClaudePlans.ActivityFeed do
 
   @impl true
   def init(_) do
+    :ets.new(@ets_table, [:set, :protected, :named_table, read_concurrency: true])
+    :ets.insert(@ets_table, {:events, []})
+
     plans_dir = ClaudePlans.plans_dir()
     projects_dir = ClaudePlans.projects_dir()
 
@@ -80,11 +97,6 @@ defmodule ClaudePlans.ActivityFeed do
        known_files: known_files,
        events: []
      }}
-  end
-
-  @impl true
-  def handle_call(:list_events, _from, state) do
-    {:reply, state.events, state}
   end
 
   @impl true
@@ -132,6 +144,7 @@ defmodule ClaudePlans.ActivityFeed do
     cutoff = DateTime.add(DateTime.utc_now(), -@ttl_ms, :millisecond)
     events = Enum.filter(state.events, &(DateTime.compare(&1.timestamp, cutoff) == :gt))
     Process.send_after(self(), :gc_expired, @gc_interval_ms)
+    publish_events(events)
     {:noreply, %{state | events: events}}
   end
 
@@ -179,6 +192,7 @@ defmodule ClaudePlans.ActivityFeed do
 
     events = [event | state.events] |> Enum.take(@max_events)
     known_files = update_known_files(state.known_files, path, action)
+    publish_events(events)
 
     Registry.dispatch(ClaudePlans.Registry, :activity_updates, fn entries ->
       for {pid, _} <- entries, do: send(pid, {:activity_event, event})
@@ -186,6 +200,8 @@ defmodule ClaudePlans.ActivityFeed do
 
     {:noreply, %{state | events: events, known_files: known_files}}
   end
+
+  defp publish_events(events), do: :ets.insert(@ets_table, {:events, events})
 
   defp update_known_files(known_files, path, :deleted), do: Map.delete(known_files, path)
   defp update_known_files(known_files, path, _action), do: update_known_file(known_files, path)
