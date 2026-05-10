@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2026-05-10
+
+### Added
+- **Browse search always finds the folder under your cursor** — When typing in the "Add folder" browse search, the immediate children of the directory you're currently browsing are fuzzy-matched locally and shown ahead of background-index results. You no longer need to wait for the background indexer to reach a deep directory before its children become selectable
+
+### Changed
+- **Background directory indexer skips heavy build/cache dirs** — `deps`, `node_modules`, `_build`, `target`, `dist`, `build`, `.venv`, `venv`, `__pycache__`, `Pods`, `vendor`, `.next`, `.nuxt`, `.turbo` are no longer descended into. The 10k-entry budget is spent on real project directories instead, so deeper user folders show up in browse search faster and irrelevant build output no longer pollutes results
+- **Activity feed reads are lock-free** — `ActivityFeed.list_events/0` now reads directly from a protected ETS table instead of going through `GenServer.call`. Eliminates LiveView mount timeouts when the feed process is briefly busy with file-system I/O
+
+### Fixed
+- **Annotation panel stale on file switch** — Selecting a different file in the Projects or Folders viewer now clears the annotation panel for the previous file, instead of leaving the prior file's annotations visible
+
 ## [0.10.2] - 2026-04-23
 
 ### Fixed
