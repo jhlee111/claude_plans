@@ -759,9 +759,11 @@ defmodule ClaudePlans.Web.BrowserLive do
       base = socket.assigns.browse_path
       {:noreply, assign(socket, browse_dirs: list_subdirs(base), browse_filter: "")}
     else
-      # Instant search from pre-built index — returns [{path, match_indices}]
-      results = ClaudePlans.DirIndex.search(query, 30)
-      {:noreply, assign(socket, browse_dirs: results, browse_filter: query)}
+      base = socket.assigns.browse_path
+      local = local_filter_matches(base, query)
+      index_results = ClaudePlans.DirIndex.search(query, 30)
+      merged = merge_browse_results(local, index_results, base)
+      {:noreply, assign(socket, browse_dirs: merged, browse_filter: query)}
     end
   end
 
@@ -1816,6 +1818,50 @@ defmodule ClaudePlans.Web.BrowserLive do
       {:error, _} ->
         []
     end
+  end
+
+  # Fuzzy-match immediate children of `base` against `query` using the same
+  # scoring as DirIndex. Guarantees the folder under the user's cursor is
+  # always selectable, even if the background indexer hasn't reached it.
+  defp local_filter_matches(base, query) do
+    case File.ls(base) do
+      {:ok, entries} ->
+        entries
+        |> Enum.filter(fn name ->
+          not String.starts_with?(name, ".") and File.dir?(Path.join(base, name))
+        end)
+        |> Enum.flat_map(fn name ->
+          case ClaudePlans.DirIndex.match_string(name, query) do
+            {:ok, indices, score} -> [{name, indices, score}]
+            :no_match -> []
+          end
+        end)
+        |> Enum.sort_by(fn {_n, _i, s} -> s end, :desc)
+        |> Enum.take(30)
+        |> Enum.map(fn {n, i, _s} -> {n, i} end)
+
+      {:error, _} ->
+        []
+    end
+  end
+
+  # Concatenate local results first (they represent the user's current browse
+  # context), then index results, dropping any index entry whose absolute path
+  # is already represented locally.
+  defp merge_browse_results(local, index_results, base) do
+    home = System.user_home!()
+
+    local_abs =
+      local
+      |> Enum.map(fn {name, _indices} -> Path.expand(Path.join(base, name)) end)
+      |> MapSet.new()
+
+    deduped =
+      Enum.reject(index_results, fn {rel, _idx, _direct, _sub} ->
+        MapSet.member?(local_abs, Path.expand(Path.join(home, rel)))
+      end)
+
+    local ++ deduped
   end
 
   # Reusable annotation panel for LiveComponent-based tabs (Folders, Projects)

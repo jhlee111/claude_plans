@@ -10,6 +10,11 @@ defmodule ClaudePlans.DirIndex do
   @max_entries 10_000
   @rescan_interval_ms 300_000
 
+  # Directories we never descend into — they're huge, rarely contain the user's
+  # own work, and would exhaust `@max_entries` before reaching real projects.
+  # Build artifacts, package caches, VCS internals.
+  @skip_dirs ~w(deps node_modules _build target dist build .venv venv __pycache__ Pods vendor .next .nuxt .turbo)
+
   def start_link(_opts) do
     GenServer.start_link(__MODULE__, [], name: __MODULE__)
   end
@@ -40,6 +45,18 @@ defmodule ClaudePlans.DirIndex do
   @spec add_path(String.t()) :: :ok
   def add_path(full_path) do
     GenServer.cast(__MODULE__, {:add_path, full_path})
+  end
+
+  @doc """
+  Pure subsequence-match helper — same scoring as `search/2`, but run against
+  a caller-supplied string. Lets callers score arbitrary paths (e.g. the
+  directory they're currently browsing) using the same semantics as the index.
+  """
+  @spec match_string(String.t(), String.t()) ::
+          {:ok, [non_neg_integer()], float()} | :no_match
+  def match_string(haystack, query) do
+    q = query |> String.downcase() |> String.graphemes()
+    subsequence_match(String.downcase(haystack), q)
   end
 
   # --- Server ---
@@ -128,7 +145,9 @@ defmodule ClaudePlans.DirIndex do
     case File.ls(current) do
       {:ok, entries} ->
         entries
-        |> Enum.filter(fn name -> not String.starts_with?(name, ".") end)
+        |> Enum.filter(fn name ->
+          not String.starts_with?(name, ".") and name not in @skip_dirs
+        end)
         |> Enum.sort()
         |> Enum.reduce(acc, fn name, acc ->
           if Process.get(ref) >= max do
@@ -164,7 +183,8 @@ defmodule ClaudePlans.DirIndex do
         sub =
           entries
           |> Enum.filter(fn name ->
-            not String.starts_with?(name, ".") and File.dir?(Path.join(path, name))
+            not String.starts_with?(name, ".") and name not in @skip_dirs and
+              File.dir?(Path.join(path, name))
           end)
           |> Enum.take(50)
           |> Enum.reduce(0, fn dir, acc ->
@@ -188,7 +208,8 @@ defmodule ClaudePlans.DirIndex do
         sub =
           entries
           |> Enum.filter(fn name ->
-            not String.starts_with?(name, ".") and File.dir?(Path.join(path, name))
+            not String.starts_with?(name, ".") and name not in @skip_dirs and
+              File.dir?(Path.join(path, name))
           end)
           |> Enum.take(30)
           |> Enum.reduce(0, fn dir, acc ->
